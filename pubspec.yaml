@@ -1,0 +1,40 @@
+name: flutter_application_1
+description: "Auré, la casa que te escucha."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
+  speech_to_text: any
+  flutter_tts: any
+  flutter_local_notifications: any
+  quick_actions: any
+  wakelock_plus: any
+  local_auth: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo/
+  fonts:
+    - family: BodoniModa
+      fonts:
+        - asset: assets/fonts/BodoniModa.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+    - family: Jost
+      fonts:
+        - asset: assets/fonts/Jost.ttf

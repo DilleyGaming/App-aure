@@ -1,0 +1,55 @@
+# Compila la app de Auré en la nube de GitHub:
+#  - Aure-Android: el archivo .apk para instalar en el móvil.
+#  - Aure-Windows: la carpeta con Aure.exe para abrir con doble clic.
+# Se ejecuta al subir cambios o pulsando "Run workflow" en la pestaña Actions.
+name: Compilar Auré
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Crear las carpetas de Android y Windows si faltan
+        run: flutter create . --project-name flutter_application_1 --org com.andrelia --platforms=android,windows
+      - name: Preparar el proyecto (permisos, nombre, huella)
+        run: python3 tool/preparar.py
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aure-Android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nuget/setup-nuget@v2
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Crear las carpetas de Android y Windows si faltan
+        run: flutter create . --project-name flutter_application_1 --org com.andrelia --platforms=android,windows
+      - name: Preparar el proyecto (nombre y título)
+        run: python tool/preparar.py
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aure-Windows
+          path: build/windows/x64/runner/Release/
