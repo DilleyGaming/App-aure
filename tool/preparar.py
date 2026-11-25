@@ -108,8 +108,37 @@ def windows():
         print("windows/runner/main.cpp listo")
 
 
+def iconos():
+    """Pone el logo de Auré como icono de la app (Android y Windows) y quita el destello blanco al abrir."""
+    import shutil
+    origen = ruta("tool", "iconos", "android")
+    res = ruta("android", "app", "src", "main", "res")
+    if os.path.isdir(origen) and os.path.isdir(res):
+        for carpeta, _, archivos in os.walk(origen):
+            destino = os.path.join(res, os.path.relpath(carpeta, origen))
+            os.makedirs(destino, exist_ok=True)
+            for a in archivos:
+                shutil.copyfile(os.path.join(carpeta, a), os.path.join(destino, a))
+        man = ruta("android", "app", "src", "main", "AndroidManifest.xml")
+        s = leer(man)
+        if "android:roundIcon" not in s:
+            s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"', 1)
+            escribir(man, s)
+        for fondo in glob.glob(os.path.join(res, "drawable*", "launch_background.xml")):
+            t = leer(fondo)
+            t = t.replace("?android:colorBackground", "@color/aure_fondo_icono").replace("@android:color/white", "@color/aure_fondo_icono")
+            escribir(fondo, t)
+        print("iconos de Android listos")
+    ico = ruta("tool", "iconos", "windows", "app_icon.ico")
+    destino = ruta("windows", "runner", "resources", "app_icon.ico")
+    if os.path.exists(ico) and os.path.isdir(os.path.dirname(destino)):
+        shutil.copyfile(ico, destino)
+        print("icono de Windows listo")
+
+
 if __name__ == "__main__":
     manifiesto()
     actividad()
     gradle()
     windows()
+    iconos()
