@@ -77,6 +77,8 @@ def gradle():
         if "desugar_jdk_libs" not in s:
             s = s.rstrip() + '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
         s = s.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(flutter.minSdkVersion, 23)")
+        # Algunos plugins nuevos piden compilar contra Android 37 o superior.
+        s = re.sub(r"compileSdk = flutter\.compileSdkVersion\b", "compileSdk = maxOf(flutter.compileSdkVersion, 37)", s)
         escribir(kts, s)
         print("build.gradle.kts listo")
     elif os.path.exists(groovy):
@@ -86,6 +88,7 @@ def gradle():
         if "desugar_jdk_libs" not in s:
             s = s.rstrip() + "\n\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
         s = s.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion Math.max(flutter.minSdkVersion, 23)")
+        s = re.sub(r"compileSdk(Version)? flutter\.compileSdkVersion\b", "compileSdk Math.max(flutter.compileSdkVersion, 37)", s)
         escribir(groovy, s)
         print("build.gradle listo")
 
