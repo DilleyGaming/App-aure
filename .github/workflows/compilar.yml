@@ -27,7 +27,17 @@ jobs:
       - name: Preparar el proyecto (permisos, nombre, huella)
         run: python3 tool/preparar.py
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Revisar el código
+        shell: bash
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib > analisis.txt 2>&1 || true
+          grep -E "^ *error" analisis.txt | head -80 > errores.txt || true
+          if [ -s errores.txt ]; then echo "::error title=Errores de Dart::$(sed ':a;N;$!ba;s/\n/%0A/g' errores.txt)"; fi
+      - name: Compilar el apk
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee build.txt || { echo "::error title=Fallo al compilar::$(grep -vE '^\s*$' build.txt | tail -70 | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: Aure-Android
@@ -35,6 +45,7 @@ jobs:
 
   windows:
     name: Windows (.exe)
+    needs: android
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
