@@ -8,6 +8,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   android:
     name: Android (.apk)
@@ -42,6 +45,13 @@ jobs:
         with:
           name: Aure-Android
           path: build/app/outputs/flutter-apk/app-release.apk
+      - name: Guardar el apk en la rama "apk"
+        shell: bash
+        run: |
+          mkdir -p /tmp/apk && cp build/app/outputs/flutter-apk/app-release.apk /tmp/apk/Aure.apk
+          cd /tmp/apk && git init -q -b apk && git add Aure.apk
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "APK de Auré"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
 
   windows:
     name: Windows (.exe)
