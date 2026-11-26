@@ -160,7 +160,7 @@ class _RelojDigitalState extends State<RelojDigital> with SingleTickerProviderSt
         child: AnimatedBuilder(
           animation: _ritmo,
           builder: (context, _) {
-            final segundos = _ahora.second + (sinMovimiento ? 0 : _ritmo.value);
+            final segundos = _ahora.second + (sinMovimiento ? 0.0 : _ritmo.value);
             final respira = sinMovimiento ? 0.5 : 0.5 + 0.5 * math.sin(segundos * math.pi);
             return CustomPaint(
               painter: _EsferaDigital(segundos: segundos, respira: respira),
