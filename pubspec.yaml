@@ -18,6 +18,11 @@ dependencies:
   quick_actions: any
   wakelock_plus: any
   local_auth: any
+  home_widget: any
+  package_info_plus: any
+  url_launcher: any
+  qr_flutter: any
+  mobile_scanner: any
 
 dev_dependencies:
   flutter_test:

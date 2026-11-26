@@ -15,6 +15,10 @@ jobs:
   android:
     name: Android (.apk)
     runs-on: ubuntu-latest
+    env:
+      # Contraseña de la firma fija de Auré (Settings > Secrets > Actions > AURE_CLAVE).
+      # Sin ella, el apk se firma con una clave temporal y hay que desinstalar antes de instalar.
+      AURE_CLAVE: ${{ secrets.AURE_CLAVE }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,7 +31,17 @@ jobs:
           cache: true
       - name: Crear las carpetas de Android y Windows si faltan
         run: flutter create . --project-name flutter_application_1 --org com.andrelia --platforms=android,windows
-      - name: Preparar el proyecto (permisos, nombre, huella)
+      - name: Firma fija de Auré
+        if: env.AURE_CLAVE != ''
+        shell: bash
+        run: |
+          {
+            echo "storePassword=$AURE_CLAVE"
+            echo "keyPassword=$AURE_CLAVE"
+            echo "keyAlias=aure"
+            echo "storeFile=$GITHUB_WORKSPACE/tool/firma/aure-firma.p12"
+          } > android/key.properties
+      - name: Preparar el proyecto (permisos, nombre, huella, icono, widget)
         run: python3 tool/preparar.py
       - run: flutter pub get
       - name: Revisar el código
@@ -40,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          flutter build apk --release 2>&1 | tee build.txt || { echo "::error title=Fallo al compilar::$(grep -vE '^\s*$' build.txt | tail -70 | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
+          flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }} 2>&1 | tee build.txt || { echo "::error title=Fallo al compilar::$(grep -vE '^\s*$' build.txt | tail -70 | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: Aure-Android
@@ -49,7 +63,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p /tmp/apk && cp build/app/outputs/flutter-apk/app-release.apk /tmp/apk/Aure.apk
-          cd /tmp/apk && git init -q -b apk && git add Aure.apk
+          # La app mira este archivo para avisar de que hay una versión nueva.
+          echo '{"build": ${{ github.run_number }}, "nombre": "1.0.${{ github.run_number }}", "url": "https://github.com/${{ github.repository }}/raw/apk/Aure.apk"}' > /tmp/apk/version.json
+          cd /tmp/apk && git init -q -b apk && git add Aure.apk version.json
           git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "APK de Auré"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
 
@@ -69,7 +85,11 @@ jobs:
       - name: Preparar el proyecto (nombre y título)
         run: python tool/preparar.py
       - run: flutter pub get
-      - run: flutter build windows --release
+      - name: Compilar Windows
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build windows --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }} 2>&1 | tee build.txt || { echo "::error title=Fallo al compilar Windows::$(grep -vE '^\s*$' build.txt | grep -iE 'error|fail|warning C|LNK' | tail -40 | sed ':a;N;$!ba;s/\n/%0A/g')"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: Aure-Windows

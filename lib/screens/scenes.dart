@@ -295,7 +295,7 @@ class ScenesTab extends StatelessWidget {
         final propias = home.scenes;
         final puedeCrear = !PerfilStore.i.invitado;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 120),
+          padding: const EdgeInsets.fromLTRB(22, 34, 22, 40),
           children: [
             Encabezado(t('nav.escenas'), subtitulo: t('esc.subtitulo')),
             const SizedBox(height: 6),

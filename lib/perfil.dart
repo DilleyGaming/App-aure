@@ -40,15 +40,46 @@ class PerfilStore extends ChangeNotifier {
   Preferencias prefs = Preferencias();
   bool invitado = false;
 
+  /// Cómo quiere la persona que Auré la llame (si no, su nombre de Home Assistant).
+  String? apodo;
+
   Future<void> cargar() async {
     _elegido = await _almacen.read(key: 'perfil_activo');
     invitado = (await _almacen.read(key: 'modo_invitado')) == '1';
+    I18n.nombreAsistente = await _almacen.read(key: 'nombre_asistente');
     await _cargarPrefs();
     notifyListeners();
   }
 
-  /// Nombre de la persona: la elegida en este dispositivo o la del usuario conectado.
-  String nombre(HaHome home) => _elegido ?? home.usuarioNombre ?? '';
+  /// Nombre de la persona: su apodo, la elegida en este dispositivo o la del usuario conectado.
+  String nombre(HaHome home) => apodo ?? _elegido ?? home.usuarioNombre ?? '';
+
+  /// Cambia cómo te llama Auré. Vacío = volver al nombre de Home Assistant.
+  Future<void> cambiarApodo(String valor) async {
+    final limpio = valor.trim();
+    apodo = limpio.isEmpty ? null : limpio;
+    notifyListeners();
+    if (apodo == null) {
+      await _almacen.delete(key: _claveApodo);
+    } else {
+      await _almacen.write(key: _claveApodo, value: apodo);
+    }
+  }
+
+  /// Cambia el nombre de la asistente en toda la app. Vacío = Auré.
+  Future<void> cambiarNombreAsistente(String valor) async {
+    final limpio = valor.trim();
+    I18n.nombreAsistente = limpio.isEmpty || limpio == 'Auré' ? null : limpio;
+    notifyListeners();
+    I18n.i.refrescar();
+    if (I18n.nombreAsistente == null) {
+      await _almacen.delete(key: 'nombre_asistente');
+    } else {
+      await _almacen.write(key: 'nombre_asistente', value: I18n.nombreAsistente);
+    }
+  }
+
+  String get _claveApodo => 'apodo_${_elegido ?? 'principal'}';
 
   String rol(HaHome home) {
     if (invitado) return t('rol.invitado');
@@ -58,6 +89,7 @@ class PerfilStore extends ChangeNotifier {
   String get _clavePrefs => 'prefs_${_elegido ?? 'principal'}';
 
   Future<void> _cargarPrefs() async {
+    apodo = await _almacen.read(key: _claveApodo);
     final texto = await _almacen.read(key: _clavePrefs);
     prefs = texto == null ? Preferencias() : Preferencias.fromJson(jsonDecode(texto) as Map<String, dynamic>);
   }

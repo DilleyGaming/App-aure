@@ -224,7 +224,7 @@ class RoomsTab extends StatelessWidget {
       builder: (context, _) {
         final sinAreas = home.devices.isNotEmpty && home.devices.every((e) => home.areaOf(e.id) == null);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 120),
+          padding: const EdgeInsets.fromLTRB(22, 34, 22, 40),
           children: [
             Encabezado(t('nav.habitaciones'), subtitulo: t('hab.subtitulo')),
             const SizedBox(height: 20),

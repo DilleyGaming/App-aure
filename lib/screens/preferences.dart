@@ -10,6 +10,7 @@ import '../utils.dart';
 import '../acento.dart';
 import '../widgets/avisos.dart';
 import '../widgets/common.dart';
+import 'personalizar.dart';
 
 /// "Mis preferencias": quién eres y cómo te gusta la casa.
 class PreferencesScreen extends StatelessWidget {
@@ -84,6 +85,11 @@ class PreferencesScreen extends StatelessWidget {
                         ],
                       ),
                     ],
+
+                    // Personalizar
+                    const SizedBox(height: 28),
+                    _titulo(t('pers.titulo')),
+                    SeccionPersonalizar(home: home),
 
                     // Temperatura
                     const SizedBox(height: 28),
@@ -196,42 +202,7 @@ class PreferencesScreen extends StatelessWidget {
                     // Color de acento
                     const SizedBox(height: 32),
                     _titulo(t('pref.acento')),
-                    ListenableBuilder(
-                      listenable: AcentoStore.i,
-                      builder: (context, _) => Row(
-                        children: [
-                          for (final op in const [
-                            (Acento.champan, 'acento.champan', Color(0xFFD4B57A)),
-                            (Acento.rosa, 'acento.rosa', Color(0xFFDDAE96)),
-                            (Acento.plata, 'acento.plata', Color(0xFFC9C9CC)),
-                          ]) ...[
-                            if (op.$1 != Acento.champan) const SizedBox(width: 10),
-                            Expanded(
-                              child: Pressable(
-                                label: t(op.$2),
-                                onTap: () => AcentoStore.i.cambiar(op.$1),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  decoration: aureCard(active: AcentoStore.i.acento == op.$1, radius: 18),
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        width: 30,
-                                        height: 30,
-                                        decoration: BoxDecoration(shape: BoxShape.circle, color: op.$3),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Text(t(op.$2), style: sans(13), textAlign: TextAlign.center),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    const SelectorEstilo(),
 
                     // Voz
                     const SizedBox(height: 32),
@@ -534,5 +505,70 @@ class SelectorIdioma extends StatelessWidget {
       ),
     );
     return compacto ? hijo : Expanded(child: hijo);
+  }
+}
+
+/// Selector del estilo de color: cinco muestras con su color real.
+class SelectorEstilo extends StatelessWidget {
+  const SelectorEstilo({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: AcentoStore.i,
+      builder: (context, _) => SizedBox(
+        height: 118,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: muestrasAcento.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (context, i) {
+            final m = muestrasAcento[i];
+            final activo = AcentoStore.i.acento == m.$1;
+            return Pressable(
+              label: t(m.$2),
+              onTap: () {
+                Tacto.confirmar();
+                AcentoStore.i.cambiar(m.$1);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 96,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: aureCard(active: activo, radius: 18),
+                child: Column(
+                  children: [
+                    // La muestra se ve con su color real, sea cual sea el estilo actual.
+                    SinFiltroAcento(
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: m.$3,
+                          border: Border.all(color: m.$4.withValues(alpha: 0.9), width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: m.$4,
+                            boxShadow: [BoxShadow(color: m.$4.withValues(alpha: 0.5), blurRadius: 10)],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(t(m.$2), style: sans(13), textAlign: TextAlign.center, maxLines: 1),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 }

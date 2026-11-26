@@ -26,6 +26,15 @@ class I18n extends ChangeNotifier {
   /// Se llama al cambiar de idioma (por ejemplo, para traducir los accesos directos).
   static void Function()? alCambiar;
 
+  /// Nombre que el cliente le ha puesto a la asistente (null = Auré).
+  static String? nombreAsistente;
+
+  /// Redibuja la app (por ejemplo, al cambiar el nombre de la asistente).
+  void refrescar() {
+    notifyListeners();
+    alCambiar?.call();
+  }
+
   Future<void> cambiar(Idioma nuevo) async {
     idioma = nuevo;
     notifyListeners();
@@ -38,6 +47,8 @@ class I18n extends ChangeNotifier {
 String t(String clave, [Map<String, String>? valores]) {
   var texto = _textos[clave]?[I18n.i.idioma.index] ?? clave;
   valores?.forEach((k, v) => texto = texto.replaceAll('{$k}', v));
+  final propio = I18n.nombreAsistente;
+  if (propio != null) texto = texto.replaceAll('Auré', propio).replaceAll('أوري', propio);
   return texto;
 }
 
@@ -245,10 +256,12 @@ const _textos = <String, List<String>>{
   'pref.noche': ['Modo noche', 'Night mode', 'الوضع الليلي'],
   'pref.nocheSub': ['De 23:00 a 7:00 la pantalla se atenúa sin cambiar los colores', 'From 11 pm to 7 am the screen dims without changing colours', 'من 11 مساءً إلى 7 صباحاً تخفت الشاشة دون تغيير الألوان'],
   'pref.brilloNoche': ['Brillo por la noche', 'Night brightness', 'السطوع ليلاً'],
-  'pref.acento': ['Color de acento', 'Accent colour', 'لون التمييز'],
+  'pref.acento': ['Estilo', 'Style', 'النمط'],
   'acento.champan': ['Oro champán', 'Champagne gold', 'ذهبي شمبانيا'],
-  'acento.rosa': ['Oro rosa', 'Rose gold', 'ذهبي وردي'],
-  'acento.plata': ['Plata', 'Silver', 'فضي'],
+  'acento.bronce': ['Bronce', 'Bronze', 'برونزي'],
+  'acento.perla': ['Perla', 'Pearl', 'لؤلؤي'],
+  'acento.esmeralda': ['Esmeralda', 'Emerald', 'زمردي'],
+  'acento.azul': ['Azul noche', 'Midnight blue', 'أزرق ليلي'],
   'bien.1t': ['Esta es tu casa.', 'This is your home.', 'هذا منزلك.'],
   'bien.1d': ['Auré ya la conoce: sus luces, sus estancias y cómo la vivís.', 'Auré already knows it: its lights, its rooms and how you live in it.', 'أوري يعرفه بالفعل: إضاءته وغرفه وطريقة عيشكم فيه.'],
   'bien.2t': ['Háblale como a una persona.', 'Talk to it like a person.', 'تحدّث إليه كما تتحدث إلى شخص.'],
@@ -334,4 +347,79 @@ const _textos = <String, List<String>>{
   'rol.invitado': ['Invitado', 'Guest', 'ضيف'],
   'pref.aplicar': ['Aplicar mi ambiente ahora', 'Apply my ambience now', 'طبّق أجوائي الآن'],
   'pref.aplicada': ['Tu ambiente está listo.', 'Your ambience is ready.', 'أجواؤك جاهزة.'],
+
+  // Conexión
+  'conectar.fuera': ['Dirección fuera de casa', 'Address when away', 'العنوان خارج المنزل'],
+  'conectar.fueraAyuda': ['Tailscale, Nabu Casa o tu dominio. Auré la usa sola cuando sales.', 'Tailscale, Nabu Casa or your domain. Auré switches to it when you leave.', 'Tailscale أو Nabu Casa أو نطاقك. يستخدمه أوري تلقائيًا عند خروجك.'],
+  'conectar.anadirFuera': ['+ Añadir dirección para fuera de casa', '+ Add an address for when you are away', '+ أضف عنوانًا لخارج المنزل'],
+  'conectar.usuario': ['Usuario', 'Username', 'اسم المستخدم'],
+  'conectar.clave': ['Contraseña', 'Password', 'كلمة المرور'],
+  'conectar.usarToken': ['Usar un token de acceso', 'Use an access token', 'استخدم رمز وصول'],
+  'conectar.usarUsuario': ['Entrar con usuario y contraseña', 'Sign in with username and password', 'الدخول باسم المستخدم وكلمة المرور'],
+  'conectar.ayudaUsuario': ['Usa el mismo usuario y contraseña de tu casa (Home Assistant).', 'Use the same username and password as your home (Home Assistant).', 'استخدم اسم المستخدم وكلمة المرور نفسيهما لمنزلك (Home Assistant).'],
+  'conectar.faltanUsuario': ['Escribe tu usuario y tu contraseña.', 'Enter your username and password.', 'أدخل اسم المستخدم وكلمة المرور.'],
+  'conectar.malUsuario': ['Usuario o contraseña incorrectos.', 'Wrong username or password.', 'اسم المستخدم أو كلمة المرور غير صحيحة.'],
+  'conectar.mfa': ['Tu usuario tiene verificación en dos pasos: entra con un token de acceso.', 'Your account uses two-step verification: sign in with an access token.', 'حسابك يستخدم التحقق بخطوتين: ادخل برمز وصول.'],
+  'qr.escanear': ['Escanear código QR', 'Scan QR code', 'امسح رمز QR'],
+  'qr.apunta': ['Apunta al código que aparece en el otro móvil o tablet de la casa.', 'Point at the code shown on the other phone or tablet in the home.', 'وجّه الكاميرا إلى الرمز الظاهر على الهاتف أو اللوحة الأخرى في المنزل.'],
+  'qr.noValido': ['Ese código no es de Auré.', 'That code is not an Auré code.', 'هذا الرمز ليس من أوري.'],
+  'qr.otroMovil': ['Conectar otro móvil', 'Connect another phone', 'ربط هاتف آخر'],
+  'qr.otroMovilSub': ['Enséñale este código y entra con su usuario', 'Show this code and sign in with their user', 'اعرض هذا الرمز وادخل بحسابه'],
+  'qr.explica': ['Escanéalo desde la app del otro móvil. Solo lleva las direcciones de la casa: cada persona entra con su usuario.', "Scan it from the other phone's app. It only holds the home addresses: everyone signs in with their own user.", 'امسحه من تطبيق الهاتف الآخر. يحتوي فقط على عناوين المنزل: كل شخص يدخل بحسابه.'],
+  'qr.sinFuera': ['Añade la dirección de fuera de casa en Ajustes para que también funcione fuera.', 'Add the away address in Settings so it also works outside.', 'أضف العنوان الخارجي في الإعدادات ليعمل خارج المنزل أيضًا.'],
+  'dir.titulo': ['Direcciones de la casa', 'Home addresses', 'عناوين المنزل'],
+  'dir.sinFuera': ['Solo dentro de casa · toca para añadir la de fuera', 'Home only · tap to add the away address', 'داخل المنزل فقط · المس لإضافة العنوان الخارجي'],
+  'dir.usandoCasa': ['Conectada dentro de casa', 'Connected at home', 'متصل داخل المنزل'],
+  'dir.usandoFuera': ['Conectada desde fuera de casa', 'Connected from outside', 'متصل من خارج المنزل'],
+  'dir.guardadas': ['Direcciones guardadas.', 'Addresses saved.', 'تم حفظ العناوين.'],
+
+  // Actualizaciones
+  'act.titulo': ['Nueva versión de Auré', 'New version of Auré', 'إصدار جديد من أوري'],
+  'act.texto': ['Hay una versión nueva ({v}). Descárgala e instálala: se pone encima y no pierdes nada.', "There's a new version ({v}). Download and install it: it updates in place and you keep everything.", 'يتوفر إصدار جديد ({v}). نزّله وثبّته: يُحدَّث دون أن تفقد شيئًا.'],
+  'act.descargar': ['Descargar', 'Download', 'تنزيل'],
+  'act.luego': ['Más tarde', 'Later', 'لاحقًا'],
+
+  // Widget y pulsar para hablar
+  'widget.hablar': ['Hablar', 'Talk', 'تحدّث'],
+  'widget.llego': ['Llego a casa', "I'm home", 'وصلت'],
+  'widget.noches': ['Buenas noches', 'Good night', 'تصبح على خير'],
+  'pulsar.escucho': ['Te escucho…', "I'm listening…", 'أسمعك…'],
+  'pulsar.suelta': ['Habla y suelta para enviar', 'Speak, then let go to send', 'تحدّث ثم اترك للإرسال'],
+
+  // Personalizar
+  'pers.titulo': ['Personalizar', 'Personalise', 'التخصيص'],
+  'pers.tuNombre': ['Cómo te llama', 'What it calls you', 'كيف يناديك'],
+  'pers.sinNombre': ['Sin nombre', 'No name', 'بلا اسم'],
+  'pers.tuNombreAyuda': ['Así te saludará Auré. Déjalo vacío para usar tu nombre de la casa.', 'This is how Auré will greet you. Leave it empty to use your home name.', 'هكذا سيحييك أوري. اتركه فارغًا لاستخدام اسمك في المنزل.'],
+  'pers.suNombre': ['Nombre de la asistente', "Assistant's name", 'اسم المساعدة'],
+  'pers.suNombreAyuda': ['Cómo se llama en la app. Para despertarla en voz alta, elige abajo su palabra.', 'Her name in the app. To wake her by voice, choose her word below.', 'اسمها في التطبيق. لإيقاظها بالصوت، اختر كلمتها أدناه.'],
+  'pers.palabra': ['Palabra para despertarla', 'Wake word', 'كلمة التنبيه'],
+  'pers.palabraSub': ['La que escuchan los micrófonos de la casa', 'The one the home microphones listen for', 'التي تسمعها ميكروفونات المنزل'],
+  'pers.voz': ['Su voz', 'Her voice', 'صوتها'],
+  'pers.vozDefecto': ['Voz de este móvil', "This phone's voice", 'صوت هذا الهاتف'],
+  'pers.vozPropia': ['Voz elegida', 'Chosen voice', 'الصوت المختار'],
+  'pers.vozAyuda': ['Toca una voz para escucharla. Es la voz con la que te contesta en este móvil.', 'Tap a voice to hear it. It is the voice she answers with on this phone.', 'المس صوتًا لسماعه. هو الصوت الذي تجيبك به على هذا الهاتف.'],
+  'pers.vozN': ['Voz', 'Voice', 'صوت'],
+  'pers.internet': ['con internet', 'online', 'عبر الإنترنت'],
+  'pers.tono': ['Tono', 'Pitch', 'طبقة الصوت'],
+  'pers.grave': ['más grave', 'deeper', 'أعمق'],
+  'pers.aguda': ['más aguda', 'higher', 'أعلى'],
+  'pers.normal': ['normal', 'normal', 'عادي'],
+  'pers.velocidad': ['Velocidad', 'Speed', 'السرعة'],
+  'pers.pausada': ['más pausada', 'slower', 'أبطأ'],
+  'pers.rapida': ['más rápida', 'faster', 'أسرع'],
+  'pers.probar': ['Escuchar cómo suena', 'Hear how it sounds', 'استمع إلى الصوت'],
+  'voz.prueba': ['Hola, soy Auré. Tu casa, en buenas manos.', "Hello, I'm Auré. Your home, in good hands.", 'مرحبًا، أنا أوري. منزلك في أيدٍ أمينة.'],
+  'region.es': ['España', 'Spain', 'إسبانيا'],
+  'region.mx': ['México', 'Mexico', 'المكسيك'],
+  'region.us': ['EE. UU.', 'US', 'الولايات المتحدة'],
+  'region.gb': ['Reino Unido', 'UK', 'المملكة المتحدة'],
+  'region.ae': ['Emiratos', 'UAE', 'الإمارات'],
+  'region.sa': ['Arabia Saudí', 'Saudi Arabia', 'السعودية'],
+  'region.eg': ['Egipto', 'Egypt', 'مصر'],
+  'palabra.noDisponible': ['Los micrófonos no dejan cambiar la palabra desde aquí.', "The microphones don't allow changing the word from here.", 'لا تسمح الميكروفونات بتغيير الكلمة من هنا.'],
+  'palabra.ayuda': ['Se cambia en los {n} micrófonos de la casa.', 'It changes on the {n} microphones in the home.', 'تتغير في ميكروفونات المنزل الـ{n}.'],
+  'palabra.hecho': ['Ahora despierta con «{p}».', 'Now she wakes up with "{p}".', 'الآن تستيقظ عند «{p}».'],
+  'palabra.error': ['No he podido cambiar todos los micrófonos.', "I couldn't change every microphone.", 'تعذّر تغيير كل الميكروفونات.'],
+  'palabra.propia': ['¿Quieres una palabra propia, como «Oye Auré»? Se entrena aparte una sola vez y luego aparece aquí.', 'Want your own word, like "Hey Auré"? It is trained once separately and then shows up here.', 'تريد كلمة خاصة مثل «يا أوري»؟ تُدرَّب مرة واحدة ثم تظهر هنا.'],
 };

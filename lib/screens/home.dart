@@ -103,15 +103,16 @@ class HomeTab extends StatelessWidget {
       builder: (context, _) {
         final casa = estadoCasa(home);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 120),
+          padding: const EdgeInsets.fromLTRB(22, 46, 22, 40),
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(child: Text(saludoPersonal(home), style: serif(30))),
                 aureLogo(size: 38),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 22),
             TuDia(home: home),
             const SizedBox(height: 16),
             Container(

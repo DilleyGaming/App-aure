@@ -11,6 +11,8 @@ import 'ha/ha_home.dart';
 import 'i18n.dart';
 import 'perfil.dart';
 import 'reposo.dart';
+import 'sesion.dart';
+import 'widget_casa.dart';
 import 'screens/home.dart';
 import 'screens/connect.dart';
 import 'screens/modo.dart';
@@ -98,6 +100,7 @@ class _RaizState extends State<Raiz> {
   bool _logoTerminado = false;
   bool _verBienvenida = false;
   String _url = 'http://192.168.1.155';
+  String _urlFuera = '';
 
   @override
   void initState() {
@@ -114,32 +117,77 @@ class _RaizState extends State<Raiz> {
     await DispositivoStore.i.cargar();
     await Alertas.iniciar();
     await Atajos.iniciar();
-    final url = await _almacen.read(key: 'url');
+    await WidgetCasa.iniciar();
+    // Al cambiar de idioma (o el nombre de la asistente), se traducen los accesos directos y el widget.
+    I18n.alCambiar = () {
+      Atajos.actualizar();
+      WidgetCasa.actualizar();
+    };
+    final url = await Sesion.direccionCasa();
+    final fuera = await Sesion.direccionFuera();
     final token = await _almacen.read(key: 'token');
+    final renovacion = await _almacen.read(key: 'refresh_token');
     if (url != null) _url = url;
-    if (url != null && token != null) {
-      final casa = HaHome(url, token);
+    if (fuera != null) _urlFuera = fuera;
+    if (url != null && (token != null || renovacion != null)) {
+      final casa = HaHome(
+        [url, if (fuera != null) fuera],
+        token ?? '',
+        renovar: renovacion == null ? null : (base) => Sesion.renovar(base, renovacion),
+      );
       await casa.start();
       _casa = casa;
     }
     if (mounted) setState(() => _cargando = false);
   }
 
-  Future<String?> _conectar(String url, String token) async {
-    if (url.isEmpty || token.isEmpty) return t('conectar.faltan');
-    final limpia = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
-    final casa = HaHome(limpia, token);
+  Future<String?> _conectar(DatosConexion d) async {
+    final casaUrl = Sesion.limpiar(d.casa);
+    final fueraUrl = Sesion.limpiar(d.fuera);
+    final direcciones = [if (casaUrl.isNotEmpty) casaUrl, if (fueraUrl.isNotEmpty) fueraUrl];
+    if (direcciones.isEmpty) return t('conectar.faltan');
+    final conToken = d.token.trim().isNotEmpty;
+    if (!conToken && (d.usuario.trim().isEmpty || d.clave.isEmpty)) return t('conectar.faltanUsuario');
+
+    HaHome casa;
+    String? renovacion;
+    if (conToken) {
+      casa = HaHome(direcciones, d.token.trim());
+    } else {
+      // Entramos por la primera dirección que responda (la de casa o la de fuera).
+      Entrada? entrada;
+      for (final base in direcciones) {
+        entrada = await Sesion.entrar(base, d.usuario.trim(), d.clave);
+        if (!entrada.sinConexion) break;
+      }
+      if (entrada == null || entrada.sinConexion) return t('error.conexion');
+      if (entrada.error != null || entrada.acceso == null) return entrada.error ?? t('conectar.fallo');
+      renovacion = entrada.renovacion;
+      final r = renovacion;
+      casa = HaHome(
+        direcciones,
+        entrada.acceso!,
+        renovar: r == null ? null : (base) => Sesion.renovar(base, r),
+      );
+    }
     await casa.start();
     if (casa.status == HaStatus.error) {
       final error = casa.error;
       casa.dispose();
       return error ?? t('conectar.fallo');
     }
-    await _almacen.write(key: 'url', value: limpia);
-    await _almacen.write(key: 'token', value: token);
+    await Sesion.guardarDirecciones(direcciones.first, direcciones.length > 1 ? direcciones[1] : '');
+    if (conToken) {
+      await _almacen.write(key: 'token', value: d.token.trim());
+      await _almacen.delete(key: 'refresh_token');
+    } else {
+      await _almacen.delete(key: 'token');
+      if (renovacion != null) await _almacen.write(key: 'refresh_token', value: renovacion);
+    }
     final vista = await _almacen.read(key: 'bienvenida_vista');
     setState(() {
-      _url = limpia;
+      _url = direcciones.first;
+      _urlFuera = direcciones.length > 1 ? direcciones[1] : '';
       _casa = casa;
       _verBienvenida = vista != '1';
     });
@@ -153,6 +201,7 @@ class _RaizState extends State<Raiz> {
     // Esperamos a que termine la transición antes de cerrar la conexión.
     Future<void>.delayed(const Duration(milliseconds: 900), () => casa?.dispose());
     await _almacen.delete(key: 'token');
+    await _almacen.delete(key: 'refresh_token');
     await DispositivoStore.i.olvidar();
   }
 
@@ -188,6 +237,7 @@ class _RaizState extends State<Raiz> {
         key: const ValueKey('conectar'),
         alConectar: _conectar,
         urlInicial: _url,
+        urlFueraInicial: _urlFuera,
       );
     } else {
       pantalla = Shell(

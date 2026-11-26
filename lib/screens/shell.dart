@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import '../actualizar.dart';
 import '../ha/ha_home.dart';
 import '../alertas.dart';
 import '../atajos.dart';
@@ -8,6 +10,8 @@ import '../i18n.dart';
 import '../permisos.dart';
 import '../perfil.dart';
 import '../reposo.dart';
+import '../sesion.dart';
+import '../widget_casa.dart';
 import '../theme.dart';
 import '../widgets/breathing_orb.dart';
 import '../widgets/aure_icon.dart';
@@ -17,6 +21,8 @@ import '../widgets/voz_pared.dart';
 import '../widgets/permiso_card.dart';
 import '../widgets/fondo.dart';
 import '../widgets/hoja.dart';
+import '../widgets/avisos.dart';
+import '../widgets/pulsar_hablar.dart';
 import 'home.dart';
 import 'modo.dart';
 import 'preferences.dart';
@@ -78,6 +84,23 @@ void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar)
                 Navigator.pop(hoja);
               },
             ),
+          if (!invitado && !d.esPared) ...[
+            opcion(Icons.qr_code_2, t('qr.otroMovil'), t('qr.otroMovilSub'), () {
+              Navigator.pop(hoja);
+              mostrarQrConexion(context, home);
+            }),
+            opcion(
+              Icons.public,
+              t('dir.titulo'),
+              home.direcciones.length < 2
+                  ? t('dir.sinFuera')
+                  : (home.usandoFuera ? t('dir.usandoFuera') : t('dir.usandoCasa')),
+              () {
+                Navigator.pop(hoja);
+                editarDirecciones(context, home);
+              },
+            ),
+          ],
           if (home.esAdmin && !d.esPared)
             opcion(Icons.verified_user_outlined, t('perm.titulo'), t('perm.sub'), () {
               Navigator.pop(hoja);
@@ -96,6 +119,95 @@ void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar)
       ),
     );
   });
+}
+
+/// Código QR para conectar otro móvil a esta casa (solo lleva las direcciones).
+void mostrarQrConexion(BuildContext context, HaHome home) {
+  final fuera = home.direcciones.length > 1 ? home.direcciones[1] : null;
+  abrirHoja<void>(context, builder: (hoja) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AsaHoja(),
+          const SizedBox(height: 6),
+          Text(t('qr.otroMovil'), style: serif(26), textAlign: TextAlign.center),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: AureColors.crema, borderRadius: BorderRadius.circular(22)),
+            child: QrImageView(
+              data: Sesion.codigoQr(home.direcciones.first, fuera),
+              size: 220,
+              backgroundColor: AureColors.crema,
+              eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AureColors.negro),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: AureColors.negro,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(t('qr.explica'), textAlign: TextAlign.center, style: sans(14, color: AureColors.gris)),
+          if (fuera == null) ...[
+            const SizedBox(height: 10),
+            Text(t('qr.sinFuera'), textAlign: TextAlign.center, style: sans(13, color: AureColors.dorado)),
+          ],
+        ],
+      ),
+    );
+  });
+}
+
+/// Cambiar la dirección de casa y la de fuera.
+Future<void> editarDirecciones(BuildContext context, HaHome home) async {
+  final casa = TextEditingController(text: home.direcciones.first);
+  final fuera = TextEditingController(text: home.direcciones.length > 1 ? home.direcciones[1] : '');
+  InputDecoration campo(String texto, [String? ayuda]) => InputDecoration(
+        labelText: texto,
+        helperText: ayuda,
+        helperMaxLines: 2,
+        helperStyle: sans(12, color: AureColors.grisOscuro),
+        labelStyle: sans(14, color: AureColors.gris),
+        filled: true,
+        fillColor: AureColors.panel,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      );
+  final guardar = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      backgroundColor: AureColors.panelAlto,
+      title: Text(t('dir.titulo'), style: serif(24)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: casa, style: sans(15), keyboardType: TextInputType.url, decoration: campo(t('conectar.direccion'))),
+          const SizedBox(height: 14),
+          TextField(
+            controller: fuera,
+            style: sans(15),
+            keyboardType: TextInputType.url,
+            decoration: campo(t('conectar.fuera'), t('conectar.fueraAyuda')),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('comun.cancelar'), style: sans(14, color: AureColors.gris))),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: Text(t('comun.guardar'), style: sans(14, color: AureColors.dorado))),
+      ],
+    ),
+  );
+  if (guardar != true) return;
+  final c1 = Sesion.limpiar(casa.text);
+  final c2 = Sesion.limpiar(fuera.text);
+  if (c1.isEmpty) return;
+  await Sesion.guardarDirecciones(c1, c2);
+  home.direcciones
+    ..clear()
+    ..add(c1);
+  if (c2.isNotEmpty) home.direcciones.add(c2);
+  if (context.mounted) Avisos.mostrar(context, t('dir.guardadas'), icono: Icons.public);
 }
 
 /// Los aparatos de la estancia donde está la pantalla de pared.
@@ -146,6 +258,10 @@ class _ShellState extends State<Shell> {
   int _pestanaTablet = 0;
   final _paginasTablet = PageController();
 
+  // Móvil: Auré y, deslizando, Inicio, Habitaciones y Escenas.
+  int _paginaMovil = 0;
+  final _paginasMovil = PageController();
+
   late final VigilanteCasa _vigilante = VigilanteCasa(widget.home);
 
   @override
@@ -155,21 +271,33 @@ class _ShellState extends State<Shell> {
     Reposo.i.actividad();
     _vigilante;
     Atajos.escuchar(_atajo);
+    WidgetCasa.escuchar(_atajo);
     PermisosStore.i.conectar(widget.home);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        if (mounted) Actualizar.comprobar(context);
+      });
+    });
   }
 
   @override
   void dispose() {
     _paginasTablet.dispose();
+    _paginasMovil.dispose();
     _vigilante.parar();
     Atajos.dejarDeEscuchar();
+    WidgetCasa.dejarDeEscuchar();
     PermisosStore.i.desconectar();
     super.dispose();
   }
 
-  /// Acceso directo desde el icono de la app.
+  /// Acceso directo desde el icono de la app o desde el widget de la pantalla de inicio.
   void _atajo(String tipo) {
-    if (tipo == 'hablar') return; // la app ya abre lista para hablar
+    if (tipo == 'hablar') {
+      // Vuelve a Auré, lista para hablar.
+      if (_paginasMovil.hasClients) _irMovil(0);
+      return;
+    }
     for (final e in escenasAure) {
       if (e.claveTitulo == tipo) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -179,22 +307,63 @@ class _ShellState extends State<Shell> {
     }
   }
 
-  void _abrirFunciones() {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        transitionDuration: const Duration(milliseconds: 380),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) => FuncionesScreen(home: widget.home, alDesconectar: widget.alDesconectar),
-        transitionsBuilder: (_, animacion, __, child) {
-          final curva = CurvedAnimation(parent: animacion, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curva,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curva),
-              child: child,
+  void _irMovil(int i) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!_paginasMovil.hasClients) return;
+    final distancia = (_paginasMovil.page ?? _paginaMovil.toDouble()) - i;
+    if (distancia.abs() > 1.5) {
+      _paginasMovil.jumpToPage(i);
+    } else {
+      _paginasMovil.animateToPage(i, duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
+    }
+    setState(() => _paginaMovil = i);
+  }
+
+  Widget _conMargen(Widget hijo) => SafeArea(bottom: false, child: hijo);
+
+  /// Móvil: se pasa de Auré a la casa deslizando el dedo; la luz del centro de la barra vuelve a Auré.
+  Widget _movil() {
+    return PopScope(
+      canPop: _paginaMovil == 0,
+      onPopInvokedWithResult: (hecho, _) {
+        if (!hecho) _irMovil(0);
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: false,
+        body: PageView(
+          controller: _paginasMovil,
+          onPageChanged: (i) {
+            Tacto.toque();
+            FocusManager.instance.primaryFocus?.unfocus();
+            setState(() => _paginaMovil = i);
+          },
+          children: [
+            _MantenerViva(
+              child: TalkView(
+                home: widget.home,
+                alMenu: () => _irMovil(1),
+                alPerfil: () => abrirPreferencias(context, widget.home),
+              ),
             ),
-          );
-        },
+            _conMargen(HomeTab(home: widget.home, alVerHabitaciones: () => _irMovil(2))),
+            _conMargen(RoomsTab(home: widget.home)),
+            _conMargen(ScenesTab(home: widget.home)),
+          ],
+        ),
+        bottomNavigationBar: AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          child: _paginaMovil == 0
+              ? const SizedBox(width: double.infinity)
+              : _BarraInferior(
+                  home: widget.home,
+                  indice: _paginaMovil - 1,
+                  alCambiar: (i) => _irMovil(i + 1),
+                  alHablar: () => _irMovil(0),
+                  alAjustes: () => abrirAjustes(context, widget.home, widget.alDesconectar),
+                ),
+        ),
       ),
     );
   }
@@ -215,13 +384,7 @@ class _ShellState extends State<Shell> {
           children: [
             FondoVivo(
               home: widget.home,
-              child: esTablet
-                  ? _tablet()
-                  : TalkView(
-                      home: widget.home,
-                      alMenu: _abrirFunciones,
-                      alPerfil: () => abrirPreferencias(context, widget.home),
-                    ),
+              child: esTablet ? _tablet() : _movil(),
             ),
             AvisoConexion(home: widget.home, alCambiar: widget.alDesconectar),
             if (d.esPared) Positioned.fill(child: VozPared(home: widget.home)),
@@ -277,9 +440,10 @@ class _ShellState extends State<Shell> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Pressable(
+                        PulsarParaHablar(
+                          home: widget.home,
                           label: t('hablar.boton'),
-                          onTap: () => abrirConversacion(context, widget.home),
+                          alTocar: () => abrirConversacion(context, widget.home),
                           child: Container(
                             height: 56,
                             padding: const EdgeInsetsDirectional.fromSTEB(8, 0, 20, 0),
@@ -324,67 +488,24 @@ class _ShellState extends State<Shell> {
   }
 }
 
-/// Funciones de la casa en el móvil: inicio, habitaciones y escenas.
-/// La luz del centro de la barra vuelve a Auré.
-class FuncionesScreen extends StatefulWidget {
-  const FuncionesScreen({super.key, required this.home, required this.alDesconectar});
+/// Mantiene la conversación aunque deslices a otra página.
+class _MantenerViva extends StatefulWidget {
+  const _MantenerViva({required this.child});
 
-  final HaHome home;
-  final VoidCallback alDesconectar;
+  final Widget child;
 
   @override
-  State<FuncionesScreen> createState() => _FuncionesScreenState();
+  State<_MantenerViva> createState() => _MantenerVivaState();
 }
 
-class _FuncionesScreenState extends State<FuncionesScreen> {
-  int _pestana = 0;
-  final _paginas = PageController();
-
+class _MantenerVivaState extends State<_MantenerViva> with AutomaticKeepAliveClientMixin {
   @override
-  void dispose() {
-    _paginas.dispose();
-    super.dispose();
-  }
-
-  void _irA(int i) {
-    setState(() => _pestana = i);
-    _paginas.animateToPage(i, duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
-  }
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AureColors.negro,
-      body: FondoVivo(
-        home: widget.home,
-        child: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: PageView(
-              controller: _paginas,
-              onPageChanged: (i) {
-                Tacto.toque();
-                setState(() => _pestana = i);
-              },
-              children: [
-                HomeTab(home: widget.home, alVerHabitaciones: () => _irA(1)),
-                RoomsTab(home: widget.home),
-                ScenesTab(home: widget.home),
-              ],
-            ),
-          ),
-          AvisoConexion(home: widget.home, alCambiar: widget.alDesconectar),
-        ],
-      ),
-      ),
-      bottomNavigationBar: _BarraInferior(
-        indice: _pestana,
-        alCambiar: _irA,
-        alHablar: () => Navigator.of(context).pop(),
-        alAjustes: () => abrirAjustes(context, widget.home, widget.alDesconectar),
-      ),
-    );
+    super.build(context);
+    return widget.child;
   }
 }
 
@@ -446,12 +567,14 @@ class AvisoConexion extends StatelessWidget {
 /// Barra inferior del móvil con la luz de Auré en el centro.
 class _BarraInferior extends StatelessWidget {
   const _BarraInferior({
+    required this.home,
     required this.indice,
     required this.alCambiar,
     required this.alHablar,
     required this.alAjustes,
   });
 
+  final HaHome home;
   final int indice;
   final ValueChanged<int> alCambiar;
   final VoidCallback alHablar;
@@ -474,9 +597,11 @@ class _BarraInferior extends StatelessWidget {
               _item(1, AureIcono.habitaciones, t('nav.habitaciones')),
               Expanded(
                 child: Center(
-                  child: Pressable(
+                  // Toque: volver a Auré. Mantener pulsado: hablarle sin salir de aquí.
+                  child: PulsarParaHablar(
+                    home: home,
                     label: t('hablar.boton'),
-                    onTap: alHablar,
+                    alTocar: alHablar,
                     child: const BreathingOrb(size: 64),
                   ),
                 ),

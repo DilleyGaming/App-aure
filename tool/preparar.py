@@ -45,6 +45,7 @@ def manifiesto():
     intents = {
         "android.speech.RecognitionService": '        <intent><action android:name="android.speech.RecognitionService"/></intent>\n',
         "android.intent.action.TTS_SERVICE": '        <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>\n',
+        'android:scheme="https"': '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>\n',
     }
     faltan = "".join(v for k, v in intents.items() if k not in s)
     if faltan:
@@ -52,6 +53,28 @@ def manifiesto():
             s = s.replace("<queries>", "<queries>\n" + faltan.rstrip("\n"), 1)
         else:
             s = s.replace("</manifest>", "    <queries>\n" + faltan + "    </queries>\n</manifest>", 1)
+    # Widget de la pantalla de inicio (home_widget): receptor y apertura desde el widget.
+    if "AureWidget" not in s:
+        s = s.replace(
+            "</application>",
+            '    <receiver android:name=".AureWidget" android:exported="true">\n'
+            '            <intent-filter>\n'
+            '                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>\n'
+            '            </intent-filter>\n'
+            '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/aure_widget_info"/>\n'
+            '        </receiver>\n'
+            '    </application>',
+            1,
+        )
+    if "es.antonborri.home_widget.action.LAUNCH" not in s:
+        s = s.replace(
+            "</activity>",
+            '    <intent-filter>\n'
+            '                <action android:name="es.antonborri.home_widget.action.LAUNCH"/>\n'
+            '            </intent-filter>\n'
+            '        </activity>',
+            1,
+        )
     escribir(p, s)
     print("AndroidManifest.xml listo")
 
@@ -67,6 +90,28 @@ def actividad():
         print(os.path.basename(p), "listo")
 
 
+def widget():
+    """Copia el widget de Auré (Kotlin y recursos) junto a MainActivity."""
+    import shutil
+    actividades = glob.glob(ruta("android", "app", "src", "main", "**", "MainActivity.*"), recursive=True)
+    if not actividades:
+        return
+    principal = actividades[0]
+    paquete = re.search(r"^package\s+([\w.]+)", leer(principal), re.M)
+    if not paquete:
+        return
+    codigo = leer(ruta("tool", "android_extra", "kotlin", "AureWidget.kt")).replace("PAQUETE", paquete.group(1))
+    escribir(os.path.join(os.path.dirname(principal), "AureWidget.kt"), codigo)
+    origen = ruta("tool", "android_extra", "res")
+    res = ruta("android", "app", "src", "main", "res")
+    for carpeta, _, archivos in os.walk(origen):
+        destino = os.path.join(res, os.path.relpath(carpeta, origen))
+        os.makedirs(destino, exist_ok=True)
+        for a in archivos:
+            shutil.copyfile(os.path.join(carpeta, a), os.path.join(destino, a))
+    print("widget listo")
+
+
 def gradle():
     kts = ruta("android", "app", "build.gradle.kts")
     groovy = ruta("android", "app", "build.gradle")
@@ -77,6 +122,30 @@ def gradle():
         if "desugar_jdk_libs" not in s:
             s = s.rstrip() + '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
         s = s.replace("minSdk = flutter.minSdkVersion", "minSdk = maxOf(flutter.minSdkVersion, 23)")
+        # Firma fija de Auré: si existe android/key.properties, las versiones se instalan encima.
+        if os.path.exists(ruta("android", "key.properties")) and "aureFirma" not in s:
+            if "import java.util.Properties" not in s:
+                s = "import java.io.FileInputStream\nimport java.util.Properties\n\n" + s
+            s = s.replace(
+                "android {",
+                "android {\n"
+                "    val aureFirma = Properties().apply {\n"
+                "        val f = rootProject.file(\"key.properties\")\n"
+                "        if (f.exists()) FileInputStream(f).use { load(it) }\n"
+                "    }\n"
+                "    signingConfigs {\n"
+                "        create(\"aure\") {\n"
+                "            keyAlias = aureFirma.getProperty(\"keyAlias\")\n"
+                "            keyPassword = aureFirma.getProperty(\"keyPassword\")\n"
+                "            storeFile = file(aureFirma.getProperty(\"storeFile\"))\n"
+                "            storePassword = aureFirma.getProperty(\"storePassword\")\n"
+                "            storeType = \"PKCS12\"\n"
+                "        }\n"
+                "    }\n",
+                1,
+            )
+            s = s.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("aure")')
+            print("firma fija activada")
         # Algunos plugins nuevos piden compilar contra Android 37 o superior.
         s = re.sub(r"compileSdk = flutter\.compileSdkVersion\b", "compileSdk = maxOf(flutter.compileSdkVersion, 37)", s)
         escribir(kts, s)
@@ -142,3 +211,4 @@ if __name__ == "__main__":
     gradle()
     windows()
     iconos()
+    widget()

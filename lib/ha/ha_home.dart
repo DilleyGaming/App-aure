@@ -67,10 +67,14 @@ class Persona {
 
 /// Toda la casa: estado en tiempo real, habitaciones y acciones.
 class HaHome extends ChangeNotifier {
-  HaHome(this.baseUrl, this.token);
+  /// [direcciones]: primero la de casa y después la de fuera (si hay). Auré usa sola la que responda.
+  /// [renovar]: si la sesión es con usuario y contraseña, pide un token nuevo cuando caduca.
+  HaHome(this.direcciones, this.token, {this.renovar}) : baseUrl = direcciones.first;
 
-  final String baseUrl;
-  final String token;
+  final List<String> direcciones;
+  String baseUrl;
+  String token;
+  final Future<String?> Function(String base)? renovar;
 
   static const controlables = {'light', 'switch', 'cover', 'climate', 'media_player', 'fan'};
 
@@ -102,7 +106,10 @@ class HaHome extends ChangeNotifier {
   WebSocket? _ws;
   int _siguienteId = 0;
   final Map<int, void Function(dynamic)> _pendientes = {};
+  final Map<int, Completer<dynamic>> _esperas = {};
   Timer? _reintento;
+  Timer? _renovacion;
+  bool _fueraDeLinea = false;
   bool _cerrado = false;
   String? _conversacionId;
 
@@ -114,16 +121,60 @@ class HaHome extends ChangeNotifier {
   // ---------- Conexión ----------
 
   Future<void> start() async {
+    await _elegirDireccion();
+    if (renovar != null) {
+      await _renovarToken();
+      // Los tokens de sesión duran 30 minutos: se renuevan antes de que caduquen.
+      _renovacion = Timer.periodic(const Duration(minutes: 20), (_) => _renovarToken());
+    }
     await _cargarEstados();
     _abrirSocket();
   }
 
-  Future<void> _cargarEstados() async {
+  /// Prueba primero la dirección de casa y, si no responde, la de fuera.
+  Future<void> _elegirDireccion() async {
+    if (direcciones.length < 2) return;
+    for (var i = 0; i < direcciones.length; i++) {
+      final url = direcciones[i];
+      try {
+        await http
+            .get(Uri.parse('$url/api/'))
+            .timeout(Duration(milliseconds: i == 0 ? 2500 : 7000));
+        // Cualquier respuesta (aunque sea "sin permiso") significa que la casa está ahí.
+        if (baseUrl != url) {
+          baseUrl = url;
+          _avisar();
+        }
+        return;
+      } catch (_) {
+        // No responde: probamos la siguiente.
+      }
+    }
+  }
+
+  /// Dirección de casa o de fuera que se está usando ahora.
+  bool get usandoFuera => direcciones.length > 1 && baseUrl != direcciones.first;
+
+  Future<bool> _renovarToken() async {
+    final r = renovar;
+    if (r == null) return false;
+    try {
+      final nuevo = await r(baseUrl);
+      if (nuevo != null) {
+        token = nuevo;
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> _cargarEstados({bool reintentado = false}) async {
     try {
       final res = await http
           .get(Uri.parse('$baseUrl/api/states'), headers: _headers)
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 401) {
+        if (!reintentado && await _renovarToken()) return _cargarEstados(reintentado: true);
         _fallo(t('error.token'));
         return;
       }
@@ -145,6 +196,12 @@ class HaHome extends ChangeNotifier {
 
   Future<void> _abrirSocket() async {
     if (_cerrado) return;
+    // Si se cortó (por ejemplo, al salir de casa), buscamos otra vez qué dirección responde.
+    if (_fueraDeLinea) {
+      await _elegirDireccion();
+      if (renovar != null) await _renovarToken();
+      _fueraDeLinea = false;
+    }
     final url = '${baseUrl.replaceFirst(RegExp(r'^http'), 'ws')}/api/websocket';
     try {
       final ws = await WebSocket.connect(url);
@@ -166,9 +223,28 @@ class HaHome extends ChangeNotifier {
 
   void _programarReintento() {
     _ws = null;
+    _fueraDeLinea = true;
+    for (final c in _esperas.values) {
+      if (!c.isCompleted) c.complete(null);
+    }
+    _esperas.clear();
     if (_cerrado) return;
     _reintento?.cancel();
     _reintento = Timer(const Duration(seconds: 5), _abrirSocket);
+  }
+
+  /// Envía un mensaje y espera la respuesta (null si falla o tarda demasiado).
+  Future<dynamic> _pedir(Map<String, dynamic> mensaje) {
+    final ws = _ws;
+    if (ws == null) return Future.value(null);
+    final id = ++_siguienteId;
+    final c = Completer<dynamic>();
+    _esperas[id] = c;
+    ws.add(jsonEncode({'id': id, ...mensaje}));
+    return c.future.timeout(const Duration(seconds: 10), onTimeout: () {
+      _esperas.remove(id);
+      return null;
+    });
   }
 
   void _enviar(Map<String, dynamic> mensaje, [void Function(dynamic)? alResponder]) {
@@ -185,10 +261,26 @@ class HaHome extends ChangeNotifier {
       case 'auth_required':
         _ws?.add(jsonEncode({'type': 'auth', 'access_token': token}));
       case 'auth_invalid':
-        _fallo(t('error.token'));
+        if (renovar != null) {
+          // Puede que el token haya caducado: lo renovamos y volvemos a entrar.
+          _renovarToken().then((ok) {
+            if (ok) {
+              _ws?.close();
+            } else {
+              _fallo(t('error.token'));
+            }
+          });
+        } else {
+          _fallo(t('error.token'));
+        }
       case 'auth_ok':
         _alAutenticar();
       case 'result':
+        final espera = _esperas.remove(msg['id']);
+        if (espera != null) {
+          if (!espera.isCompleted) espera.complete(msg['success'] == true ? (msg['result'] ?? true) : null);
+          return;
+        }
         final cb = _pendientes.remove(msg['id']);
         if (cb != null && msg['success'] == true) cb(msg['result']);
       case 'event':
@@ -305,6 +397,7 @@ class HaHome extends ChangeNotifier {
   void dispose() {
     _cerrado = true;
     _reintento?.cancel();
+    _renovacion?.cancel();
     _ws?.close();
     super.dispose();
   }
@@ -335,6 +428,29 @@ class HaHome extends ChangeNotifier {
   List<HaEntity> satelitesEn(String? areaId) => entities.values
       .where((e) => e.domain == 'assist_satellite' && (areaId == null || areaOf(e.id) == areaId))
       .toList();
+
+  /// Palabras de activación de un punto de voz: (disponibles como (id, nombre), activas, máximo).
+  Future<(List<(String, String)>, List<String>, int)?> palabrasActivacion(String satelite) async {
+    final r = await _pedir({'type': 'assist_satellite/get_configuration', 'entity_id': satelite});
+    if (r is! Map) return null;
+    final disponibles = <(String, String)>[
+      for (final w in (r['available_wake_words'] as List? ?? const []))
+        if (w is Map && w['id'] != null) (w['id'].toString(), (w['wake_word'] ?? w['id']).toString()),
+    ];
+    final activas = [for (final w in (r['active_wake_words'] as List? ?? const [])) w.toString()];
+    final maximo = (r['max_active_wake_words'] as num?)?.toInt() ?? 1;
+    return (disponibles, activas, maximo);
+  }
+
+  /// Cambia la palabra de activación de un punto de voz.
+  Future<bool> ponerPalabraActivacion(String satelite, String palabra) async {
+    final r = await _pedir({
+      'type': 'assist_satellite/set_wake_words',
+      'entity_id': satelite,
+      'wake_word_ids': [palabra],
+    });
+    return r != null;
+  }
 
   /// Estado de voz de una estancia: idle, listening, processing o responding.
   String estadoVoz(String? areaId) {
