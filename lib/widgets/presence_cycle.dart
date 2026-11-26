@@ -151,7 +151,7 @@ class _RelojDigitalState extends State<RelojDigital> with SingleTickerProviderSt
     final sinMovimiento = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final hh = _ahora.hour.toString().padLeft(2, '0');
     final mm = _ahora.minute.toString().padLeft(2, '0');
-    final cifras = serif(d * 0.27, weight: FontWeight.w400, height: 1, color: AureColors.doradoClaro)
+    final cifras = serif(d * 0.25, weight: FontWeight.w400, height: 1, color: AureColors.doradoClaro)
         .copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
     return Semantics(
       label: '$hh:$mm',
@@ -186,7 +186,7 @@ class _RelojDigitalState extends State<RelojDigital> with SingleTickerProviderSt
                           padding: EdgeInsets.symmetric(horizontal: d * 0.015),
                           child: Opacity(
                             opacity: 0.35 + 0.65 * respira,
-                            child: Text(':', style: cifras.copyWith(fontSize: d * 0.22)),
+                            child: Text(':', style: cifras.copyWith(fontSize: d * 0.2)),
                           ),
                         ),
                         Text(mm, style: cifras),
