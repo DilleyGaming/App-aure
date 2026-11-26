@@ -3,14 +3,19 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../ha/ha_home.dart';
 import '../theme.dart';
 import '../utils.dart';
 import 'analog_clock.dart';
+import 'tiempo.dart';
 
 /// Reposo: alterna con suavidad entre el reloj analógico dorado y un reloj digital
 /// con la misma esfera, para que el cambio parezca la misma pieza transformándose.
 class PresenceCycle extends StatefulWidget {
-  const PresenceCycle({super.key, this.tamano = 320});
+  const PresenceCycle({super.key, this.tamano = 320, this.home});
+
+  /// Si se da la casa, el reloj digital enseña el tiempo de fuera.
+  final HaHome? home;
 
   /// Diámetro de la esfera.
   final double tamano;
@@ -69,7 +74,7 @@ class _PresenceCycleState extends State<PresenceCycle> {
               ),
               child: _analogico
                   ? AnalogClock(key: const ValueKey('analogico'), size: d)
-                  : RelojDigital(key: const ValueKey('digital'), size: d),
+                  : RelojDigital(key: const ValueKey('digital'), size: d, home: widget.home),
             ),
           ),
           SizedBox(height: d * 0.06),
@@ -117,9 +122,10 @@ class _FechaState extends State<_Fecha> {
 /// Reloj digital de Auré: la misma esfera y bisel dorados del analógico,
 /// la hora en grande y los segundos recorriendo el borde como un arco de luz.
 class RelojDigital extends StatefulWidget {
-  const RelojDigital({super.key, this.size = 320});
+  const RelojDigital({super.key, this.size = 320, this.home});
 
   final double size;
+  final HaHome? home;
 
   @override
   State<RelojDigital> createState() => _RelojDigitalState();
@@ -143,6 +149,23 @@ class _RelojDigitalState extends State<RelojDigital> with SingleTickerProviderSt
   void dispose() {
     _ritmo.dispose();
     super.dispose();
+  }
+
+  /// Debajo de la hora: el tiempo de fuera si lo hay; si no, la marca.
+  Widget _pie(double d) {
+    final casa = widget.home;
+    final fuera = casa == null ? null : tiempoFuera(casa);
+    if (fuera == null) {
+      return Text('AURÉ', style: marca(d * 0.045, color: AureColors.dorado, spacing: d * 0.022));
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(fuera.$1, size: d * 0.06, color: AureColors.dorado),
+        SizedBox(width: d * 0.02),
+        Text(fuera.$2, style: sans(d * 0.05, color: AureColors.crema, weight: FontWeight.w300)),
+      ],
+    );
   }
 
   @override
@@ -208,10 +231,7 @@ class _RelojDigitalState extends State<RelojDigital> with SingleTickerProviderSt
                     ),
                   ),
                   SizedBox(height: d * 0.045),
-                  Text(
-                    'AURÉ',
-                    style: marca(d * 0.045, color: AureColors.dorado, spacing: d * 0.022),
-                  ),
+                  _pie(d),
                 ],
               ),
             );

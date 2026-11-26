@@ -8,6 +8,7 @@ import '../ha/ha_home.dart';
 import '../i18n.dart';
 import '../perfil.dart';
 import '../reposo.dart';
+import '../rutinas.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../voz.dart';
@@ -158,7 +159,7 @@ class _TalkViewState extends State<TalkView> {
       _respuesta = '';
       _modo = OrbMode.thinking;
     });
-    final respuesta = await widget.home.talk(frase);
+    final respuesta = await hablarConAure(widget.home, frase);
     if (!mounted) return;
     _mostrarRespuesta(respuesta);
   }

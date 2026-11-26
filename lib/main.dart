@@ -11,6 +11,7 @@ import 'ha/ha_home.dart';
 import 'i18n.dart';
 import 'perfil.dart';
 import 'reposo.dart';
+import 'invitados.dart';
 import 'sesion.dart';
 import 'widget_casa.dart';
 import 'screens/home.dart';
@@ -101,6 +102,7 @@ class _RaizState extends State<Raiz> {
   bool _verBienvenida = false;
   String _url = 'http://192.168.1.155';
   String _urlFuera = '';
+  String? _errorInicial;
 
   @override
   void initState() {
@@ -129,12 +131,18 @@ class _RaizState extends State<Raiz> {
     final renovacion = await _almacen.read(key: 'refresh_token');
     if (url != null) _url = url;
     if (fuera != null) _urlFuera = fuera;
-    if (url != null && (token != null || renovacion != null)) {
+    // Acceso de invitado: si ya ha caducado, este móvil deja de entrar en la casa.
+    final invitado = await Invitados.acceso();
+    if (invitado != null && invitado.$1.isBefore(DateTime.now())) {
+      await _olvidarSesion();
+      _errorInicial = t('inv.caducadoTuyo');
+    } else if (url != null && (token != null || renovacion != null)) {
       final casa = HaHome(
         [url, if (fuera != null) fuera],
         token ?? '',
         renovar: renovacion == null ? null : (base) => Sesion.renovar(base, renovacion),
       );
+      casa.soloAreas = invitado?.$2;
       await casa.start();
       _casa = casa;
     }
@@ -151,6 +159,7 @@ class _RaizState extends State<Raiz> {
 
     HaHome casa;
     String? renovacion;
+    final esInvitado = d.invitadoHasta != null;
     if (conToken) {
       casa = HaHome(direcciones, d.token.trim());
     } else {
@@ -170,6 +179,7 @@ class _RaizState extends State<Raiz> {
         renovar: r == null ? null : (base) => Sesion.renovar(base, r),
       );
     }
+    if (esInvitado) casa.soloAreas = d.invitadoAreas?.toSet();
     await casa.start();
     if (casa.status == HaStatus.error) {
       final error = casa.error;
@@ -184,8 +194,15 @@ class _RaizState extends State<Raiz> {
       await _almacen.delete(key: 'token');
       if (renovacion != null) await _almacen.write(key: 'refresh_token', value: renovacion);
     }
+    if (esInvitado) {
+      await Invitados.guardarAcceso(hasta: d.invitadoHasta!, areas: d.invitadoAreas);
+      await PerfilStore.i.cambiarInvitado(true);
+      final n = d.invitadoNombre;
+      if (n != null && n.isNotEmpty) await PerfilStore.i.cambiarApodo(n);
+    }
     final vista = await _almacen.read(key: 'bienvenida_vista');
     setState(() {
+      _errorInicial = null;
       _url = direcciones.first;
       _urlFuera = direcciones.length > 1 ? direcciones[1] : '';
       _casa = casa;
@@ -200,9 +217,18 @@ class _RaizState extends State<Raiz> {
     setState(() => _casa = null);
     // Esperamos a que termine la transición antes de cerrar la conexión.
     Future<void>.delayed(const Duration(milliseconds: 900), () => casa?.dispose());
+    await _olvidarSesion();
+    await DispositivoStore.i.olvidar();
+  }
+
+  Future<void> _olvidarSesion() async {
     await _almacen.delete(key: 'token');
     await _almacen.delete(key: 'refresh_token');
-    await DispositivoStore.i.olvidar();
+    if (await Invitados.acceso() != null) {
+      await Invitados.olvidarAcceso();
+      await PerfilStore.i.cambiarInvitado(false);
+      await PerfilStore.i.cambiarApodo('');
+    }
   }
 
   @override
@@ -238,6 +264,7 @@ class _RaizState extends State<Raiz> {
         alConectar: _conectar,
         urlInicial: _url,
         urlFueraInicial: _urlFuera,
+        errorInicial: _errorInicial,
       );
     } else {
       pantalla = Shell(

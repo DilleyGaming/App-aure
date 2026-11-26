@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'ha/ha_home.dart';
 import 'i18n.dart';
@@ -97,6 +98,21 @@ class VigilanteCasa {
 
   final HaHome home;
   final Map<String, String> _antes = {};
+  final Set<String> _pilasAvisadas = {};
+  static const _almacen = FlutterSecureStorage();
+
+  /// Qué hacer cuando llaman al timbre (la app abre la cámara de la entrada).
+  static void Function(String? timbre)? alLlamar;
+
+  /// Timbres: entidades "event" de tipo doorbell, o sensores con timbre/doorbell en el nombre.
+  Iterable<HaEntity> get _timbres => home.entities.values.where((e) {
+        if (e.domain == 'event') return e.attributes['device_class'] == 'doorbell';
+        if (e.domain == 'binary_sensor') {
+          final texto = '${e.id} ${e.name}'.toLowerCase();
+          return texto.contains('timbre') || texto.contains('doorbell') || texto.contains('ding');
+        }
+        return false;
+      });
 
   static const _tipos = {
     'moisture': 'alerta.agua',
@@ -110,7 +126,7 @@ class VigilanteCasa {
       );
 
   void _fotografiar() {
-    for (final e in _sensores) {
+    for (final e in [..._sensores, ..._timbres]) {
       _antes[e.id] = e.state;
     }
   }
@@ -123,6 +139,34 @@ class VigilanteCasa {
         Alertas.avisar(t(clave, {'n': e.name}));
       }
       _antes[e.id] = e.state;
+    }
+    // Timbre: un evento nuevo (cambia la hora) o un sensor que pasa a "on".
+    for (final e in _timbres) {
+      final antes = _antes[e.id];
+      final llaman = e.domain == 'event'
+          ? (antes != null && antes != e.state && e.state != 'unavailable' && e.state != 'unknown')
+          : (antes != null && antes != 'on' && e.state == 'on');
+      if (llaman) {
+        Alertas.notificar(t('timbre.llaman'), t('timbre.toca'));
+        Tacto.aviso();
+        alLlamar?.call(e.id);
+      }
+      _antes[e.id] = e.state;
+    }
+    _revisarPilas();
+  }
+
+  /// Pilas bajas (15 % o menos): un aviso por sensor cada tres días como mucho.
+  Future<void> _revisarPilas() async {
+    for (final (e, nivel) in home.pilas) {
+      if (nivel == null || nivel > 15 || _pilasAvisadas.contains(e.id)) continue;
+      _pilasAvisadas.add(e.id);
+      final clave = 'pila_${e.id}';
+      final ultima = DateTime.tryParse(await _almacen.read(key: clave) ?? '');
+      if (ultima != null && DateTime.now().difference(ultima).inDays < 3) continue;
+      await _almacen.write(key: clave, value: DateTime.now().toIso8601String());
+      final nombre = e.name.replaceAll(RegExp(r'\s*(battery|batería|bateria|pila)\s*', caseSensitive: false), ' ').trim();
+      await Alertas.notificar(t('pilas.titulo'), t('pilas.baja', {'n': nombre, 'p': nivel.round().toString()}));
     }
   }
 

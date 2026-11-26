@@ -11,6 +11,7 @@ import '../acento.dart';
 import '../widgets/avisos.dart';
 import '../widgets/common.dart';
 import 'personalizar.dart';
+import 'rutinas_vista.dart';
 
 /// "Mis preferencias": quién eres y cómo te gusta la casa.
 class PreferencesScreen extends StatelessWidget {
@@ -251,6 +252,19 @@ class PreferencesScreen extends StatelessWidget {
                         subtitulo: t('auto.vacacionesSub'),
                         activar: home.activarVacaciones,
                       ),
+                      const SizedBox(height: 10),
+                      _Automatismo(
+                        home: home,
+                        id: 'aure_saludo',
+                        icono: Icons.waving_hand_outlined,
+                        titulo: t('auto.saludo'),
+                        subtitulo: t('auto.saludoSub'),
+                        activar: home.activarSaludoLlegada,
+                      ),
+                      if (home.esAdmin) ...[
+                        const SizedBox(height: 10),
+                        SeccionRutinas(home: home),
+                      ],
                     ],
 
                     // Modo noche

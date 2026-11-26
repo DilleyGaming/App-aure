@@ -25,12 +25,16 @@ class ConnectScreen extends StatefulWidget {
     required this.alConectar,
     required this.urlInicial,
     this.urlFueraInicial = '',
+    this.errorInicial,
   });
 
   /// Devuelve un mensaje de error, o null si todo ha ido bien.
   final Future<String?> Function(DatosConexion datos) alConectar;
   final String urlInicial;
   final String urlFueraInicial;
+
+  /// Mensaje al abrir (por ejemplo, "tu acceso de invitado ha caducado").
+  final String? errorInicial;
 
   @override
   State<ConnectScreen> createState() => _ConnectScreenState();
@@ -52,6 +56,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   void initState() {
     super.initState();
     _verFuera = widget.urlFueraInicial.isNotEmpty;
+    _error = widget.errorInicial;
   }
 
   @override
@@ -90,6 +95,25 @@ class _ConnectScreenState extends State<ConnectScreen> {
       MaterialPageRoute(builder: (_) => const EscanearScreen()),
     );
     if (texto == null || !mounted) return;
+    // QR de invitado: entra directamente con su acceso temporal.
+    final invitado = Sesion.leerQrInvitado(texto);
+    if (invitado != null) {
+      if (invitado.invitadoHasta!.isBefore(DateTime.now())) {
+        setState(() => _error = t('inv.caducadoTuyo'));
+        return;
+      }
+      setState(() {
+        _conectando = true;
+        _error = null;
+      });
+      final error = await widget.alConectar(invitado);
+      if (!mounted) return;
+      setState(() {
+        _conectando = false;
+        _error = error;
+      });
+      return;
+    }
     final datos = Sesion.leerQr(texto);
     if (datos == null) {
       setState(() => _error = t('qr.noValido'));

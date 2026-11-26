@@ -13,6 +13,7 @@ import '../widgets/common.dart';
 import '../widgets/fondo.dart';
 import '../widgets/house_view.dart';
 import '../widgets/presence_cycle.dart';
+import 'casa_extra.dart';
 import 'rooms.dart';
 import 'scenes.dart';
 
@@ -115,6 +116,10 @@ class HomeTab extends StatelessWidget {
             ),
             const SizedBox(height: 22),
             TuDia(home: home),
+            if (home.personasEstado.isNotEmpty && !PerfilStore.i.invitado) ...[
+              const SizedBox(height: 18),
+              QuienEnCasa(home: home),
+            ],
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.fromLTRB(8, 18, 8, 10),
@@ -140,6 +145,8 @@ class HomeTab extends StatelessWidget {
                 Expanded(child: _Dato(Icons.music_note_outlined, '${home.playing}', t('inicio.sonando'))),
               ],
             ),
+            const SizedBox(height: 10),
+            AccesosCasa(home: home),
             const SizedBox(height: 26),
             Text(t('nav.escenas'), style: serif(22)),
             const SizedBox(height: 12),
@@ -292,7 +299,7 @@ class AmbientScreen extends StatelessWidget {
                     builder: (context, c) {
                       final porAlto = c.maxHeight / 1.16;
                       final tamano = math.min(math.min(c.maxWidth * 0.8, porAlto), 440.0);
-                      return Center(child: PresenceCycle(tamano: math.max(tamano, 120.0)));
+                      return Center(child: PresenceCycle(tamano: math.max(tamano, 120.0), home: home));
                     },
                   ),
                 ),

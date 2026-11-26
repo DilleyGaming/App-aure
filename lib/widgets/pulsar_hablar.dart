@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../ha/ha_home.dart';
 import '../i18n.dart';
 import '../reposo.dart';
+import '../rutinas.dart';
 import '../theme.dart';
 import '../voz.dart';
 import 'avisos.dart';
@@ -97,7 +98,7 @@ class _PulsarParaHablarState extends State<PulsarParaHablar> {
     }
     Tacto.confirmar();
     _estado.value = _EstadoPanel(OrbMode.thinking, frase, '');
-    final respuesta = await widget.home.talk(frase);
+    final respuesta = await hablarConAure(widget.home, frase);
     if (_panel == null) {
       Reposo.i.liberar();
       return;

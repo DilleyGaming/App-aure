@@ -52,7 +52,13 @@ class PerfilStore extends ChangeNotifier {
   }
 
   /// Nombre de la persona: su apodo, la elegida en este dispositivo o la del usuario conectado.
-  String nombre(HaHome home) => apodo ?? _elegido ?? home.usuarioNombre ?? '';
+  String nombre(HaHome home) => apodo ?? _depila(_elegido ?? home.usuarioNombre ?? '');
+
+  /// "Dani Pérez Molina" → "Dani": el saludo suena más cercano solo con el nombre de pila.
+  static String _depila(String completo) {
+    final partes = completo.trim().split(RegExp(r'\s+'));
+    return partes.isEmpty ? '' : partes.first;
+  }
 
   /// Cambia cómo te llama Auré. Vacío = volver al nombre de Home Assistant.
   Future<void> cambiarApodo(String valor) async {

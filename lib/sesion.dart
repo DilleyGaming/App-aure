@@ -13,6 +13,9 @@ class DatosConexion {
     this.usuario = '',
     this.clave = '',
     this.token = '',
+    this.invitadoHasta,
+    this.invitadoAreas,
+    this.invitadoNombre,
   });
 
   /// Dirección dentro de casa (por ejemplo http://192.168.1.155).
@@ -25,6 +28,11 @@ class DatosConexion {
 
   /// Token de larga duración (opción avanzada).
   final String token;
+
+  /// Si es un acceso de invitado: hasta cuándo, qué estancias y su nombre.
+  final DateTime? invitadoHasta;
+  final List<String>? invitadoAreas;
+  final String? invitadoNombre;
 }
 
 /// Resultado de entrar con usuario y contraseña.
@@ -146,6 +154,25 @@ class Sesion {
         host: 'conectar',
         queryParameters: {'casa': casa, if (fuera != null && fuera.isNotEmpty) 'fuera': fuera},
       ).toString();
+
+  /// Lee un QR de invitado de Auré y lo convierte en datos de conexión (null si no lo es).
+  static DatosConexion? leerQrInvitado(String texto) {
+    final uri = Uri.tryParse(texto.trim());
+    if (uri == null || uri.scheme != 'aure' || uri.host != 'invitado') return null;
+    final q = uri.queryParameters;
+    final hasta = DateTime.tryParse(q['hasta'] ?? '');
+    if (q['casa'] == null || q['u'] == null || q['p'] == null || hasta == null) return null;
+    final areas = q['areas'];
+    return DatosConexion(
+      casa: q['casa']!,
+      fuera: q['fuera'] ?? '',
+      usuario: q['u']!,
+      clave: q['p']!,
+      invitadoHasta: hasta,
+      invitadoAreas: areas == null || areas.isEmpty ? null : areas.split(','),
+      invitadoNombre: q['n'],
+    );
+  }
 
   /// Lee un código QR de Auré: (casa, fuera) o null si no es nuestro.
   static (String, String)? leerQr(String texto) {

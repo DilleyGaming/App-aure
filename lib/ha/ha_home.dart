@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -80,6 +82,9 @@ class HaHome extends ChangeNotifier {
 
   final Map<String, HaEntity> entities = {};
   List<HaArea> areas = [];
+
+  /// Invitados: solo ven y controlan estas estancias (null = todas).
+  Set<String>? soloAreas;
   HaStatus status = HaStatus.connecting;
   String? error;
 
@@ -349,7 +354,8 @@ class HaHome extends ChangeNotifier {
     });
     _enviar({'type': 'config/area_registry/list'}, (r) {
       areas = [
-        for (final a in r as List) HaArea(a['area_id'] as String, a['name'] as String),
+        for (final a in r as List)
+          if (soloAreas == null || soloAreas!.contains(a['area_id'])) HaArea(a['area_id'] as String, a['name'] as String),
       ];
       _avisar();
     });
@@ -417,6 +423,7 @@ class HaHome extends ChangeNotifier {
   List<HaEntity> get devices {
     final lista = entities.values
         .where((e) => controlables.contains(e.domain) && e.state != 'unavailable')
+        .where((e) => soloAreas == null || soloAreas!.contains(areaOf(e.id)))
         .toList();
     lista.sort((a, b) => a.name.compareTo(b.name));
     return lista;
@@ -809,6 +816,239 @@ class HaHome extends ChangeNotifier {
       if (e.domain == 'cover' && e.attributes['device_class'] == 'garage' && e.state == 'open') abiertos.add(e.name);
     }
     return abiertos;
+  }
+
+
+  // ---------- Personas, cámaras, música, pilas ----------
+
+  /// Las personas de la casa (entidades person.*), con su estado: home, not_home o una zona.
+  List<HaEntity> get personasEstado {
+    final lista = entities.values.where((e) => e.domain == 'person').toList();
+    lista.sort((a, b) => a.name.compareTo(b.name));
+    return lista;
+  }
+
+  List<HaEntity> get camaras {
+    final lista = entities.values
+        .where((e) => e.domain == 'camera' && e.state != 'unavailable')
+        .where((e) => soloAreas == null || soloAreas!.contains(areaOf(e.id)))
+        .toList();
+    lista.sort((a, b) => a.name.compareTo(b.name));
+    return lista;
+  }
+
+  List<HaEntity> get altavoces => devices.where((e) => e.domain == 'media_player').toList();
+
+  /// Sensores con pila: (entidad, porcentaje o null si solo avisa de "baja").
+  List<(HaEntity, double?)> get pilas {
+    final lista = <(HaEntity, double?)>[];
+    for (final e in entities.values) {
+      if (e.attributes['device_class'] != 'battery') continue;
+      if (e.domain == 'sensor') {
+        final v = double.tryParse(e.state);
+        if (v != null) lista.add((e, v));
+      } else if (e.domain == 'binary_sensor') {
+        lista.add((e, e.state == 'on' ? 5.0 : null));
+      }
+    }
+    lista.sort((a, b) => (a.$2 ?? 100).compareTo(b.$2 ?? 100));
+    return lista;
+  }
+
+  /// Aparatos que no responden (para el modo instalador).
+  List<HaEntity> get noResponden {
+    const importan = {...controlables, 'sensor', 'binary_sensor', 'camera', 'assist_satellite', 'lock', 'alarm_control_panel'};
+    return entities.values.where((e) => e.state == 'unavailable' && importan.contains(e.domain)).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  /// Foto actual de una cámara.
+  Future<Uint8List?> fotoCamara(String id) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/api/camera_proxy/$id'), headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) return res.bodyBytes;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Cámara que mejor encaja con algo (por ejemplo, el timbre): la de su estancia o la de la entrada.
+  HaEntity? camaraPara(String? entidad) {
+    final todas = camaras;
+    if (todas.isEmpty) return null;
+    final area = entidad == null ? null : areaOf(entidad);
+    for (final c in todas) {
+      if (area != null && areaOf(c.id) == area) return c;
+    }
+    final entrada = RegExp(r'puerta|door|entrada|front|timbre|bell|porch|calle|street', caseSensitive: false);
+    for (final c in todas) {
+      if (entrada.hasMatch(c.id) || entrada.hasMatch(c.name)) return c;
+    }
+    return todas.first;
+  }
+
+  /// Lo que ha pasado en casa desde [desde] (registro de Home Assistant).
+  Future<List<Map<String, dynamic>>> historial(DateTime desde) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/api/logbook/${desde.toUtc().toIso8601String()}'), headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return [];
+      return [for (final e in jsonDecode(res.body) as List) Map<String, dynamic>.from(e as Map)];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ---------- Modo instalador ----------
+
+  /// Hace que las luces de una estancia parpadeen para saber cuáles son.
+  Future<void> parpadear(String? areaId) async {
+    final luces = [for (final e in inArea(areaId)) if (e.domain == 'light') e.id];
+    if (luces.isEmpty) return;
+    await service('light', 'turn_on', {'entity_id': luces, 'flash': 'short'});
+  }
+
+  /// Habla por los altavoces de los puntos de voz de una estancia.
+  Future<void> probarVoz(String? areaId, String mensaje) async {
+    final micros = [for (final e in satelitesEn(areaId)) e.id];
+    if (micros.isEmpty) return;
+    await service('assist_satellite', 'announce', {'entity_id': micros, 'message': mensaje});
+  }
+
+  /// Saludo en voz alta al llegar cada persona (por los altavoces de los puntos de voz).
+  Future<String?> activarSaludoLlegada() async {
+    final quienes = personasEntidades;
+    if (quienes.isEmpty) return t('auto.sinPersonas');
+    final micros = [for (final e in satelitesEn(null)) e.id];
+    if (micros.isEmpty) return t('auto.sinMicros');
+    return guardarAutomatizacion('aure_saludo', {
+      'alias': 'Auré · Saludar al llegar',
+      'description': 'Auré saluda por su nombre a cada persona que llega a casa. Creada por la app Auré.',
+      'triggers': [
+        {'trigger': 'state', 'entity_id': quienes, 'from': 'not_home', 'to': 'home'},
+      ],
+      'actions': [
+        {'delay': '00:00:40'},
+        {
+          'action': 'assist_satellite.announce',
+          'target': {'entity_id': micros},
+          'data': {'message': t('auto.saludoMensaje')},
+        },
+      ],
+      'mode': 'queued',
+    });
+  }
+
+  // ---------- Rutinas creadas hablando ----------
+
+  /// Crea una rutina: a la hora [hora]:[minuto] (los [dias], vacío = todos) hace lo que dice [orden].
+  Future<String?> crearRutina({
+    required int hora,
+    required int minuto,
+    required List<String> dias,
+    required String orden,
+    required String descripcion,
+  }) {
+    final id = 'aure_rutina_${DateTime.now().millisecondsSinceEpoch}';
+    final hh = hora.toString().padLeft(2, '0');
+    final mm = minuto.toString().padLeft(2, '0');
+    return guardarAutomatizacion(id, {
+      'alias': 'Auré · $descripcion',
+      'description': 'Rutina creada hablando con Auré: «$orden».',
+      'triggers': [
+        {'trigger': 'time', 'at': '$hh:$mm:00'},
+      ],
+      'conditions': [
+        if (dias.isNotEmpty) {'condition': 'time', 'weekday': dias},
+      ],
+      'actions': [
+        // La orden se le da al asistente de la casa, igual que si se la dijeras en ese momento.
+        {
+          'action': 'conversation.process',
+          'data': {'text': orden, 'language': I18n.i.codigo},
+        },
+      ],
+      'mode': 'single',
+    });
+  }
+
+  /// Rutinas creadas desde Auré: (id de la automatización, nombre, entidad).
+  List<(String, String, HaEntity)> get rutinas {
+    final lista = <(String, String, HaEntity)>[];
+    for (final e in entities.values) {
+      if (e.domain != 'automation') continue;
+      final id = e.attributes['id']?.toString() ?? '';
+      if (!id.startsWith('aure_rutina_')) continue;
+      lista.add((id, e.name.replaceFirst('Auré · ', ''), e));
+    }
+    lista.sort((a, b) => a.$2.compareTo(b.$2));
+    return lista;
+  }
+
+  // ---------- Invitados (usuarios de Home Assistant que caducan) ----------
+
+  static const _prefijoInvitado = 'Invitado · ';
+
+  /// Invitados creados por Auré: (id de usuario, nombre, hasta cuándo).
+  Future<List<(String, String, DateTime?)>> invitados() async {
+    final r = await _pedir({'type': 'config/auth/list'});
+    if (r is! List) return [];
+    final lista = <(String, String, DateTime?)>[];
+    for (final u in r) {
+      if (u is! Map) continue;
+      final nombre = (u['name'] ?? '').toString();
+      if (!nombre.startsWith(_prefijoInvitado)) continue;
+      final partes = nombre.substring(_prefijoInvitado.length).split(' · ');
+      final hasta = partes.length > 1 ? DateTime.tryParse(partes.last) : null;
+      lista.add((u['id'].toString(), partes.first, hasta));
+    }
+    return lista;
+  }
+
+  /// Crea un usuario de invitado. Devuelve (usuario, contraseña) o null si falla.
+  Future<(String, String)?> crearInvitado(String nombre, DateTime hasta, {bool soloEnCasa = false}) async {
+    final fecha = hasta.toIso8601String().substring(0, 16);
+    final creado = await _pedir({
+      'type': 'config/auth/create',
+      'name': '$_prefijoInvitado$nombre · $fecha',
+      'group_ids': ['system-users'],
+      'local_only': soloEnCasa,
+    });
+    if (creado is! Map || creado['user'] is! Map) return null;
+    final id = (creado['user'] as Map)['id'].toString();
+    final azar = math.Random.secure();
+    const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    String aleatorio(int n) => List.generate(n, (_) => letras[azar.nextInt(letras.length)]).join();
+    final usuario = 'invitado_${aleatorio(6).toLowerCase()}';
+    final clave = aleatorio(20);
+    final credencial = await _pedir({
+      'type': 'config/auth_provider/homeassistant/create',
+      'user_id': id,
+      'username': usuario,
+      'password': clave,
+    });
+    if (credencial == null) {
+      await borrarUsuario(id);
+      return null;
+    }
+    return (usuario, clave);
+  }
+
+  Future<bool> borrarUsuario(String id) async {
+    final r = await _pedir({'type': 'config/auth/delete', 'user_id': id});
+    return r != null;
+  }
+
+  /// Borra los invitados cuyo acceso ya ha caducado (lo hace la app del propietario).
+  Future<void> limpiarInvitados() async {
+    if (!esAdmin) return;
+    final ahora = DateTime.now();
+    for (final inv in await invitados()) {
+      final hasta = inv.$3;
+      if (hasta != null && hasta.isBefore(ahora)) await borrarUsuario(inv.$1);
+    }
   }
 
   /// Habla con el asistente de la casa, manteniendo el hilo de la conversación.

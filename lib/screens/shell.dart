@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../actualizar.dart';
-import '../ha/ha_home.dart';
 import '../alertas.dart';
+import '../ha/ha_home.dart';
 import '../atajos.dart';
 import '../dispositivo.dart';
 import '../i18n.dart';
 import '../permisos.dart';
 import '../perfil.dart';
+import '../invitados.dart';
+import '../pin.dart';
 import '../reposo.dart';
+import '../resumen_manana.dart';
 import '../sesion.dart';
 import '../widget_casa.dart';
 import '../theme.dart';
@@ -28,6 +31,8 @@ import 'modo.dart';
 import 'preferences.dart';
 import 'rooms.dart';
 import 'scenes.dart';
+import 'casa_extra.dart';
+import 'instalador.dart';
 import 'talk.dart';
 
 void abrirPreferencias(BuildContext context, HaHome home) {
@@ -35,10 +40,15 @@ void abrirPreferencias(BuildContext context, HaHome home) {
 }
 
 /// Hoja de ajustes, común a todos los dispositivos (con el fondo desenfocado).
-void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar) {
+Future<void> abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar) async {
   final invitado = PerfilStore.i.invitado;
   final d = DispositivoStore.i;
-  abrirHoja<void>(context, builder: (hoja) {
+  // En la pantalla de pared, los ajustes pueden ir protegidos con PIN.
+  if (d.esPared && !await PinPared.comprobar(context)) return;
+  if (!context.mounted) return;
+  final tienePin = await PinPared.tienePin();
+  if (!context.mounted) return;
+  await abrirHoja<void>(context, builder: (hoja) {
     Widget opcion(IconData icono, String titulo, String? subtitulo, VoidCallback onTap) => ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(icono, color: AureColors.dorado),
@@ -53,7 +63,8 @@ void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar)
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -106,6 +117,26 @@ void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar)
               Navigator.pop(hoja);
               Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const HistorialPermisos()));
             }),
+          if (home.esAdmin && !invitado && !d.esPared)
+            opcion(Icons.badge_outlined, t('inv.titulo'), t('inv.sub'), () {
+              Navigator.pop(hoja);
+              abrirInvitados(context, home);
+            }),
+          if (!invitado)
+            opcion(Icons.history, t('historial.titulo'), t('historial.sub'), () {
+              Navigator.pop(hoja);
+              abrirHistorial(context, home);
+            }),
+          if (d.esPared)
+            opcion(Icons.lock_outline, t('pin.titulo'), tienePin ? t('pin.activado') : t('pin.sinPoner'), () {
+              Navigator.pop(hoja);
+              PinPared.configurar(context);
+            }),
+          if (home.esAdmin && !invitado)
+            opcion(Icons.construction_outlined, t('inst.titulo'), t('inst.sub'), () {
+              Navigator.pop(hoja);
+              abrirInstalador(context, home);
+            }),
           opcion(Icons.nights_stay_outlined, t('ajustes.reposo'), t('ajustes.reposoSub'), () {
             Navigator.pop(hoja);
             Reposo.i.mostrar();
@@ -116,6 +147,7 @@ void abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesconectar)
               alDesconectar();
             }),
         ],
+        ),
       ),
     );
   });
@@ -273,9 +305,20 @@ class _ShellState extends State<Shell> {
     Atajos.escuchar(_atajo);
     WidgetCasa.escuchar(_atajo);
     PermisosStore.i.conectar(widget.home);
+    // Cuando llaman al timbre: aviso con la cámara de la entrada en directo.
+    VigilanteCasa.alLlamar = (timbre) {
+      Reposo.i.despertar();
+      final c = Reposo.i.navigatorKey.currentContext ?? context;
+      if (c.mounted) abrirTimbre(c, widget.home, timbre);
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ResumenManana.comprobar(context, widget.home);
       Future<void>.delayed(const Duration(seconds: 3), () {
         if (mounted) Actualizar.comprobar(context);
+      });
+      // Los invitados caducados se borran solos de la casa.
+      Future<void>.delayed(const Duration(seconds: 12), () {
+        if (mounted) widget.home.limpiarInvitados();
       });
     });
   }
@@ -287,6 +330,7 @@ class _ShellState extends State<Shell> {
     _vigilante.parar();
     Atajos.dejarDeEscuchar();
     WidgetCasa.dejarDeEscuchar();
+    VigilanteCasa.alLlamar = null;
     PermisosStore.i.desconectar();
     super.dispose();
   }
