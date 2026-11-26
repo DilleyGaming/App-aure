@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -274,8 +275,6 @@ class AmbientScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pantalla = MediaQuery.sizeOf(context);
-    final tamanoReloj = (pantalla.shortestSide * 0.55).clamp(200.0, 420.0);
     final atenuar = PantallaStore.i.atenuarAhora();
     final contenido = Material(
       color: AureColors.negro,
@@ -283,14 +282,22 @@ class AmbientScreen extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: alDespertar,
         child: SafeArea(
-          child: Stack(
-            children: [
-              Center(child: PresenceCycle(tamano: tamanoReloj)),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 28,
-                child: ListenableBuilder(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+            child: Column(
+              children: [
+                // El reloj ocupa el sitio que queda, sin pisar nunca los textos de abajo.
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final porAlto = c.maxHeight / 1.16;
+                      final tamano = math.min(math.min(c.maxWidth * 0.8, porAlto), 440.0);
+                      return Center(child: PresenceCycle(tamano: math.max(tamano, 120.0)));
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ListenableBuilder(
                   listenable: home,
                   builder: (context, _) => Column(
                     children: [
@@ -304,8 +311,8 @@ class AmbientScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

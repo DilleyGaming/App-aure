@@ -328,41 +328,47 @@ class _ShellState extends State<Shell> {
       onPopInvokedWithResult: (hecho, _) {
         if (!hecho) _irMovil(0);
       },
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        resizeToAvoidBottomInset: false,
-        body: PageView(
-          controller: _paginasMovil,
-          onPageChanged: (i) {
-            Tacto.toque();
-            FocusManager.instance.primaryFocus?.unfocus();
-            setState(() => _paginaMovil = i);
-          },
-          children: [
-            _MantenerViva(
-              child: TalkView(
-                home: widget.home,
-                alMenu: () => _irMovil(1),
-                alPerfil: () => abrirPreferencias(context, widget.home),
-              ),
-            ),
-            _conMargen(HomeTab(home: widget.home, alVerHabitaciones: () => _irMovil(2))),
-            _conMargen(RoomsTab(home: widget.home)),
-            _conMargen(ScenesTab(home: widget.home)),
-          ],
-        ),
-        bottomNavigationBar: AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          child: _paginaMovil == 0
-              ? const SizedBox(width: double.infinity)
-              : _BarraInferior(
-                  home: widget.home,
-                  indice: _paginaMovil - 1,
-                  alCambiar: (i) => _irMovil(i + 1),
-                  alHablar: () => _irMovil(0),
-                  alAjustes: () => abrirAjustes(context, widget.home, widget.alDesconectar),
+      // Sin Scaffold con barra: así cada página respeta la barra de gestos o botones de Android.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+        children: [
+          Expanded(
+            child: PageView(
+              controller: _paginasMovil,
+              onPageChanged: (i) {
+                Tacto.toque();
+                FocusManager.instance.primaryFocus?.unfocus();
+                setState(() => _paginaMovil = i);
+              },
+              children: [
+                _MantenerViva(
+                  child: TalkView(
+                    home: widget.home,
+                    alMenu: () => _irMovil(1),
+                    alPerfil: () => abrirPreferencias(context, widget.home),
+                  ),
                 ),
+                _conMargen(HomeTab(home: widget.home, alVerHabitaciones: () => _irMovil(2))),
+                _conMargen(RoomsTab(home: widget.home)),
+                _conMargen(ScenesTab(home: widget.home)),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: _paginaMovil == 0
+                ? const SizedBox(width: double.infinity)
+                : _BarraInferior(
+                    home: widget.home,
+                    indice: _paginaMovil - 1,
+                    alCambiar: (i) => _irMovil(i + 1),
+                    alHablar: () => _irMovil(0),
+                    alAjustes: () => abrirAjustes(context, widget.home, widget.alDesconectar),
+                  ),
+          ),
+        ],
         ),
       ),
     );
