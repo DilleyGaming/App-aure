@@ -49,7 +49,9 @@ class I18n extends ChangeNotifier {
 String t(String clave, [Map<String, String>? valores]) {
   final i = I18n.i.idioma.index;
   // Español, inglés y árabe están aquí; francés, ruso e hindi en i18n_mas.dart (si falta, inglés).
-  var texto = (i < 3 ? _textos[clave]?[i] : textosMas[clave]?[i - 3]) ?? _textos[clave]?[1] ?? clave;
+  final propios = i < 3 ? _textos[clave] : textosMas[clave];
+  final base = _textos[clave];
+  var texto = propios != null ? propios[i < 3 ? i : i - 3] : (base != null ? base[1] : clave);
   valores?.forEach((k, v) => texto = texto.replaceAll('{$k}', v));
   final propio = I18n.nombreAsistente;
   if (propio != null) texto = texto.replaceAll('Auré', propio).replaceAll('أوري', propio);
