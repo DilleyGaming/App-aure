@@ -18,6 +18,9 @@ String fechaLarga(DateTime d) {
     Idioma.es => '$dia, ${d.day} de $mes',
     Idioma.en => '$dia, ${d.day} $mes',
     Idioma.ar => '$dia، ${d.day} $mes',
+    Idioma.fr => '$dia ${d.day} $mes',
+    Idioma.ru => '$dia, ${d.day} $mes',
+    Idioma.hi => '$dia, ${d.day} $mes',
   };
 }
 
@@ -26,7 +29,8 @@ String hora(DateTime d) =>
 
 String _numero(double n) {
   final texto = n.toStringAsFixed(1);
-  return I18n.i.idioma == Idioma.es ? texto.replaceAll('.', ',') : texto;
+  const conComa = {Idioma.es, Idioma.fr, Idioma.ru};
+  return conComa.contains(I18n.i.idioma) ? texto.replaceAll('.', ',') : texto;
 }
 
 String grados(double n) => _numero(n);

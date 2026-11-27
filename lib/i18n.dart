@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-enum Idioma { es, en, ar }
+import 'i18n_mas.dart';
+
+enum Idioma { es, en, ar, fr, ru, hi }
 
 /// Idioma de la app. Al cambiarlo, toda la app se redibuja.
 class I18n extends ChangeNotifier {
@@ -45,7 +47,9 @@ class I18n extends ChangeNotifier {
 
 /// Traduce una clave. Los valores entre llaves {así} se sustituyen.
 String t(String clave, [Map<String, String>? valores]) {
-  var texto = _textos[clave]?[I18n.i.idioma.index] ?? clave;
+  final i = I18n.i.idioma.index;
+  // Español, inglés y árabe están aquí; francés, ruso e hindi en i18n_mas.dart (si falta, inglés).
+  var texto = (i < 3 ? _textos[clave]?[i] : textosMas[clave]?[i - 3]) ?? _textos[clave]?[1] ?? clave;
   valores?.forEach((k, v) => texto = texto.replaceAll('{$k}', v));
   final propio = I18n.nombreAsistente;
   if (propio != null) texto = texto.replaceAll('Auré', propio).replaceAll('أوري', propio);
@@ -56,12 +60,18 @@ const diasSemana = <List<String>>[
   ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'],
   ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
   ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
+  ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
+  ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'],
+  ['सोमवार', 'मंगलवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार', 'रविवार'],
 ];
 
 const mesesAno = <List<String>>[
   ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
   ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+  ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+  ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
+  ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर'],
 ];
 
 // [español, inglés, árabe]
@@ -554,4 +564,17 @@ const _textos = <String, List<String>>{
   'inst.escucha': ['Escucha el altavoz de esa estancia.', 'Listen to the speaker in that room.', 'استمع إلى مكبر الصوت في تلك الغرفة.'],
   'inst.pilas': ['Pilas', 'Batteries', 'البطاريات'],
   'inst.pilaBien': ['bien', 'ok', 'جيدة'],
+
+  // Varias casas
+  'casas.titulo': ['Mis casas', 'My homes', 'منازلي'],
+  'casas.sub': ['{n} casas · ahora en {c}', '{n} homes · now at {c}', '{n} منازل · الآن في {c}'],
+  'casas.una': ['Añade la casa de la playa, la villa o la oficina y cambia con un toque.', 'Add the beach house, the villa or the office and switch with one tap.', 'أضف منزل الشاطئ أو الفيلا أو المكتب وانتقل بلمسة.'],
+  'casas.anadir': ['+ Añadir otra casa', '+ Add another home', '+ أضف منزلًا آخر'],
+  'casas.volver': ['Volver a {c}', 'Back to {c}', 'العودة إلى {c}'],
+  'casas.activa': ['Abierta ahora', 'Open now', 'مفتوح الآن'],
+  'casas.renombrar': ['Cambiar nombre', 'Rename', 'إعادة التسمية'],
+  'casas.nombre': ['Nombre de la casa', 'Home name', 'اسم المنزل'],
+  'casas.nombreAyuda': ['Por ejemplo: Chalet, Playa, Villa Dubái.', 'For example: Chalet, Beach, Dubai Villa.', 'مثلًا: الشاليه، الشاطئ، فيلا دبي.'],
+  'casas.quitar': ['Quitar de este móvil', 'Remove from this phone', 'إزالة من هذا الهاتف'],
+  'casas.quitarPregunta': ['¿Quitar «{c}» de este móvil? La casa no cambia: solo deja de aparecer aquí.', 'Remove "{c}" from this phone? The home itself is not changed: it just stops showing here.', 'إزالة «{c}» من هذا الهاتف؟ لن يتغير المنزل، فقط لن يظهر هنا.'],
 };

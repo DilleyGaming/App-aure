@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../casas.dart';
 import '../ha/ha_home.dart';
 import '../i18n.dart';
 import '../pantalla.dart';
@@ -14,6 +15,7 @@ import '../widgets/fondo.dart';
 import '../widgets/house_view.dart';
 import '../widgets/presence_cycle.dart';
 import 'casa_extra.dart';
+import 'casas_vista.dart';
 import 'rooms.dart';
 import 'scenes.dart';
 
@@ -107,6 +109,10 @@ class HomeTab extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.fromLTRB(22, 46, 22, 40),
           children: [
+            if (!PerfilStore.i.invitado) ...[
+              const SelectorCasa(),
+              if (CasasStore.i.casas.length > 1) const SizedBox(height: 14),
+            ],
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

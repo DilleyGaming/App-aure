@@ -470,55 +470,99 @@ class _AutomatismoState extends State<_Automatismo> {
   }
 }
 
-/// Selector de idioma: Español, English, العربية.
+/// Selector de idioma: seis idiomas. En la pantalla de conectar, un menú compacto.
 class SelectorIdioma extends StatelessWidget {
   const SelectorIdioma({super.key, this.compacto = false});
 
   final bool compacto;
 
+  static const opciones = [
+    (Idioma.es, 'Español', 'ES'),
+    (Idioma.en, 'English', 'EN'),
+    (Idioma.ar, 'العربية', 'ع'),
+    (Idioma.fr, 'Français', 'FR'),
+    (Idioma.ru, 'Русский', 'RU'),
+    (Idioma.hi, 'हिन्दी', 'हि'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    const opciones = [
-      (Idioma.es, 'Español', 'ES'),
-      (Idioma.en, 'English', 'EN'),
-      (Idioma.ar, 'العربية', 'ع'),
-    ];
     return ListenableBuilder(
       listenable: I18n.i,
-      builder: (context, _) => Row(
-        mainAxisSize: compacto ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          for (var i = 0; i < opciones.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            _boton(opciones[i]),
+      builder: (context, _) => compacto ? _menu() : _rejilla(),
+    );
+  }
+
+  Widget _menu() {
+    final actual = opciones.firstWhere((o) => o.$1 == I18n.i.idioma);
+    return PopupMenuButton<Idioma>(
+      tooltip: actual.$2,
+      color: AureColors.panelAlto,
+      onSelected: I18n.i.cambiar,
+      itemBuilder: (_) => [
+        for (final o in opciones)
+          PopupMenuItem(
+            value: o.$1,
+            child: Text(o.$2, style: sans(15, color: o.$1 == I18n.i.idioma ? AureColors.dorado : AureColors.crema)),
+          ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AureColors.panel,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: AureColors.linea),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.language, size: 16, color: AureColors.dorado),
+            const SizedBox(width: 6),
+            Text(actual.$3, style: sans(14)),
+            const Icon(Icons.expand_more, size: 18, color: AureColors.gris),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _boton((Idioma, String, String) op) {
-    final activo = I18n.i.idioma == op.$1;
-    final hijo = Pressable(
-      label: op.$2,
-      onTap: () => I18n.i.cambiar(op.$1),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        height: compacto ? 36 : 46,
-        padding: EdgeInsets.symmetric(horizontal: compacto ? 12 : 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: activo ? AureColors.dorado : AureColors.panel,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AureColors.linea),
-        ),
-        child: Text(
-          compacto ? op.$3 : op.$2,
-          style: sans(14, color: activo ? AureColors.negro : AureColors.crema),
-        ),
-      ),
+  Widget _rejilla() {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final ancho = (c.maxWidth - 16) / 3;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final o in opciones)
+              SizedBox(
+                width: ancho,
+                child: Pressable(
+                  label: o.$2,
+                  onTap: () => I18n.i.cambiar(o.$1),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: I18n.i.idioma == o.$1 ? AureColors.dorado : AureColors.panel,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: AureColors.linea),
+                    ),
+                    child: Text(
+                      o.$2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: sans(14, color: I18n.i.idioma == o.$1 ? AureColors.negro : AureColors.crema),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
-    return compacto ? hijo : Expanded(child: hijo);
   }
 }
 

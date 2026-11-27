@@ -26,6 +26,8 @@ class ConnectScreen extends StatefulWidget {
     required this.urlInicial,
     this.urlFueraInicial = '',
     this.errorInicial,
+    this.volverA,
+    this.alVolver,
   });
 
   /// Devuelve un mensaje de error, o null si todo ha ido bien.
@@ -35,6 +37,10 @@ class ConnectScreen extends StatefulWidget {
 
   /// Mensaje al abrir (por ejemplo, "tu acceso de invitado ha caducado").
   final String? errorInicial;
+
+  /// Al añadir otra casa: botón para volver a la que estaba abierta.
+  final String? volverA;
+  final VoidCallback? alVolver;
 
   @override
   State<ConnectScreen> createState() => _ConnectScreenState();
@@ -162,9 +168,20 @@ class _ConnectScreenState extends State<ConnectScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: SelectorIdioma(compacto: true),
+                  Row(
+                    children: [
+                      if (widget.alVolver != null)
+                        TextButton.icon(
+                          onPressed: widget.alVolver,
+                          icon: const Icon(Icons.arrow_back, size: 18, color: AureColors.dorado),
+                          label: Text(
+                            t('casas.volver', {'c': widget.volverA ?? ''}),
+                            style: sans(14, color: AureColors.dorado),
+                          ),
+                        ),
+                      const Spacer(),
+                      const SelectorIdioma(compacto: true),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Center(

@@ -31,6 +31,9 @@ class Voz extends ChangeNotifier {
         Idioma.es => 'es-ES',
         Idioma.en => 'en-GB',
         Idioma.ar => 'ar-AE',
+        Idioma.fr => 'fr-FR',
+        Idioma.ru => 'ru-RU',
+        Idioma.hi => 'hi-IN',
       };
 
   Future<void> cargar() async {

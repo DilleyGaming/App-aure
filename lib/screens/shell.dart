@@ -5,6 +5,7 @@ import '../actualizar.dart';
 import '../alertas.dart';
 import '../ha/ha_home.dart';
 import '../atajos.dart';
+import '../casas.dart';
 import '../dispositivo.dart';
 import '../i18n.dart';
 import '../permisos.dart';
@@ -32,6 +33,7 @@ import 'preferences.dart';
 import 'rooms.dart';
 import 'scenes.dart';
 import 'casa_extra.dart';
+import 'casas_vista.dart';
 import 'instalador.dart';
 import 'talk.dart';
 
@@ -93,6 +95,18 @@ Future<void> abrirAjustes(BuildContext context, HaHome home, VoidCallback alDesc
               () {
                 d.cambiarReposoEnTablet(!d.reposoEnTablet);
                 Navigator.pop(hoja);
+              },
+            ),
+          if (!invitado && !d.esPared)
+            opcion(
+              Icons.home_work_outlined,
+              t('casas.titulo'),
+              CasasStore.i.casas.length < 2
+                  ? t('casas.una')
+                  : t('casas.sub', {'n': '${CasasStore.i.casas.length}', 'c': CasasStore.i.actual?.nombre ?? ''}),
+              () {
+                Navigator.pop(hoja);
+                abrirCasas(context);
               },
             ),
           if (!invitado && !d.esPared) ...[

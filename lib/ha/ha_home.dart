@@ -133,7 +133,23 @@ class HaHome extends ChangeNotifier {
       _renovacion = Timer.periodic(const Duration(minutes: 20), (_) => _renovarToken());
     }
     await _cargarEstados();
+    await _cargarNombre();
     _abrirSocket();
+  }
+
+  /// Nombre de la casa en Home Assistant (Ajustes → Sistema → General).
+  String? nombreCasa;
+
+  Future<void> _cargarNombre() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/api/config'), headers: _headers)
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final n = (jsonDecode(res.body) as Map<String, dynamic>)['location_name']?.toString();
+        if (n != null && n.isNotEmpty) nombreCasa = n;
+      }
+    } catch (_) {}
   }
 
   /// Prueba primero la dirección de casa y, si no responde, la de fuera.

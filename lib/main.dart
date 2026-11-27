@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'acento.dart';
 import 'alertas.dart';
 import 'atajos.dart';
+import 'casas.dart';
 import 'dispositivo.dart';
 import 'pantalla.dart';
 import 'ha/ha_home.dart';
@@ -104,6 +105,9 @@ class _RaizState extends State<Raiz> {
   String _urlFuera = '';
   String? _errorInicial;
 
+  /// Añadiendo otra casa: se enseña la pantalla de conectar sin cerrar la actual.
+  bool _anadiendo = false;
+
   @override
   void initState() {
     super.initState();
@@ -125,6 +129,14 @@ class _RaizState extends State<Raiz> {
       Atajos.actualizar();
       WidgetCasa.actualizar();
     };
+    await CasasStore.i.cargar();
+    CasasStore.i.alCambiar = _cambiarCasa;
+    CasasStore.i.alAnadir = () => setState(() {
+          _anadiendo = true;
+          _errorInicial = null;
+          _url = 'http://';
+          _urlFuera = '';
+        });
     final url = await Sesion.direccionCasa();
     final fuera = await Sesion.direccionFuera();
     final token = await _almacen.read(key: 'token');
@@ -145,6 +157,17 @@ class _RaizState extends State<Raiz> {
       casa.soloAreas = invitado?.$2;
       await casa.start();
       _casa = casa;
+      // Casas guardadas de versiones anteriores: la actual pasa a la lista.
+      if (CasasStore.i.actual == null) {
+        await CasasStore.i.recordar(CasaGuardada(
+          id: url,
+          nombre: casa.nombreCasa ?? CasaGuardada.nombreDe(url),
+          casa: url,
+          fuera: fuera ?? '',
+          token: token,
+          renovacion: renovacion,
+        ));
+      }
     }
     if (mounted) setState(() => _cargando = false);
   }
@@ -200,9 +223,23 @@ class _RaizState extends State<Raiz> {
       final n = d.invitadoNombre;
       if (n != null && n.isNotEmpty) await PerfilStore.i.cambiarApodo(n);
     }
+    await CasasStore.i.recordar(CasaGuardada(
+      id: direcciones.first,
+      nombre: casa.nombreCasa ?? CasaGuardada.nombreDe(direcciones.first),
+      casa: direcciones.first,
+      fuera: direcciones.length > 1 ? direcciones[1] : '',
+      token: conToken ? d.token.trim() : null,
+      renovacion: conToken ? null : renovacion,
+    ));
     final vista = await _almacen.read(key: 'bienvenida_vista');
+    final anterior = _casa;
+    if (anterior != null) {
+      Reposo.i.detener();
+      Future<void>.delayed(const Duration(milliseconds: 900), anterior.dispose);
+    }
     setState(() {
       _errorInicial = null;
+      _anadiendo = false;
       _url = direcciones.first;
       _urlFuera = direcciones.length > 1 ? direcciones[1] : '';
       _casa = casa;
@@ -211,7 +248,58 @@ class _RaizState extends State<Raiz> {
     return null;
   }
 
+  /// Abre otra de las casas guardadas en este móvil.
+  Future<void> _cambiarCasa(String id) async {
+    CasaGuardada? destino;
+    for (final c in CasasStore.i.casas) {
+      if (c.id == id) destino = c;
+    }
+    if (destino == null) return;
+    final anterior = _casa;
+    Reposo.i.detener();
+    setState(() {
+      _casa = null;
+      _cargando = true;
+      _anadiendo = false;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 900), () => anterior?.dispose());
+    // La casa elegida pasa a ser la de siempre al abrir la app.
+    await Sesion.guardarDirecciones(destino.casa, destino.fuera);
+    if (destino.token != null) {
+      await _almacen.write(key: 'token', value: destino.token);
+    } else {
+      await _almacen.delete(key: 'token');
+    }
+    if (destino.renovacion != null) {
+      await _almacen.write(key: 'refresh_token', value: destino.renovacion);
+    } else {
+      await _almacen.delete(key: 'refresh_token');
+    }
+    await CasasStore.i.marcarActiva(destino.id);
+    final r = destino.renovacion;
+    final casa = HaHome(
+      destino.direcciones,
+      destino.token ?? '',
+      renovar: r == null ? null : (base) => Sesion.renovar(base, r),
+    );
+    await casa.start();
+    if (!mounted) return;
+    setState(() {
+      _url = destino!.casa;
+      _urlFuera = destino.fuera;
+      _casa = casa;
+      _cargando = false;
+    });
+  }
+
   Future<void> _desconectar() async {
+    // Si hay más casas en este móvil, quitamos esta y abrimos la siguiente.
+    final actual = CasasStore.i.activa;
+    if (actual != null) await CasasStore.i.olvidar(actual);
+    if (CasasStore.i.casas.isNotEmpty) {
+      await _cambiarCasa(CasasStore.i.casas.first.id);
+      return;
+    }
     final casa = _casa;
     Reposo.i.detener();
     setState(() => _casa = null);
@@ -258,13 +346,21 @@ class _RaizState extends State<Raiz> {
         home: _casa!,
         alTerminar: () => setState(() {}),
       );
-    } else if (_casa == null) {
+    } else if (_casa == null || _anadiendo) {
+      final volverA = _anadiendo ? CasasStore.i.actual?.nombre : null;
       pantalla = ConnectScreen(
-        key: const ValueKey('conectar'),
+        key: ValueKey(_anadiendo ? 'anadir' : 'conectar'),
         alConectar: _conectar,
         urlInicial: _url,
         urlFueraInicial: _urlFuera,
         errorInicial: _errorInicial,
+        volverA: volverA,
+        alVolver: _anadiendo
+            ? () => setState(() {
+                  _anadiendo = false;
+                  _url = CasasStore.i.actual?.casa ?? _url;
+                })
+            : null,
       );
     } else {
       pantalla = Shell(
